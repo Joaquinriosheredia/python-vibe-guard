@@ -17,16 +17,44 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Four patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Eleven patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
 
-| Rule | Pattern | Runtime effect |
-|------|---------|----------------|
-| PYVIBE-001 | `time.sleep()` inside `async def` | Freezes entire event loop for sleep duration |
-| PYVIBE-002 | `requests.*` inside `async def` | Blocks OS thread, serializes all concurrent I/O |
-| PYVIBE-003 | `asyncio.run()` inside `async def` | `RuntimeError: This event loop is already running` |
-| PYVIBE-004 | `threading.Lock()` inside `async def` | Blocks event loop under contention |
+| Rule | Pattern | Gate | Runtime effect |
+|------|---------|------|----------------|
+| PYVIBE-001 | `time.sleep()` inside `async def` | `async def` | Freezes entire event loop for sleep duration |
+| PYVIBE-002 | `requests.*` inside `async def` | `async def` | Blocks OS thread, serializes all concurrent I/O |
+| PYVIBE-003 | `asyncio.run()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
+| PYVIBE-004 | `threading.Lock/RLock/…` inside `async def` | `async def` | Blocks event loop under contention |
+| PYVIBE-005 | `@app.task` / `@shared_task` without `soft_time_limit` or `time_limit` | decorator | Worker hangs forever if external call never returns |
+| PYVIBE-006 | `ContextVar.set()` inside `async def` without `try/finally reset()` | `async def` | Context leaks into sibling async tasks |
+| PYVIBE-007 | `subprocess.run/call/check_output/Popen` inside `async def` | `async def` | Blocks OS thread for entire subprocess duration |
+| PYVIBE-008 | `sqlite3.connect()` inside `async def` | `async def` | Synchronous file I/O blocks the event loop |
+| PYVIBE-009 | `open()` builtin inside `async def` | `async def` | Synchronous file I/O blocks the event loop |
+| PYVIBE-010 | `httpx.get/post/put/…` inside `async def` | `async def` | httpx sync API blocks OS thread for full HTTP round-trip |
+| PYVIBE-011 | `os.system/popen/waitpid` inside `async def` | `async def` | Blocking OS calls with no direct async equivalent |
 
-All rules fire **only inside `async def`**. The same patterns in sync code are valid and produce zero findings.
+Rules PYVIBE-001–004, 006–011 fire **only inside `async def`**. PYVIBE-005 fires on the decorator regardless of whether the function body is async.
+
+---
+
+## Validation
+
+Scanned against 4 production Python repos (shallow clone, `python -m pyvibe <repo> --json`):
+
+| Repo | .py files | Violations | Signal |
+|------|-----------|-----------|--------|
+| [fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 2 | 1 real, 1 FP |
+| [celery](https://github.com/celery/celery) | 416 | 352 | **352 real** (PYVIBE-005) |
+| [httpx](https://github.com/encode/httpx) | 60 | 2 | 2 FP |
+| [aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 30 | 5 real, 25 FP |
+
+**Real bugs found:**
+
+- **Celery `celery/app/builtins.py`** — 9 internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, …) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
+
+- **aiohttp `examples/web_ws.py:20`** — `open()` called inside an async WebSocket handler in the official aiohttp examples directory. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
+
+**False positives:** All come from bare-name detection (`from x import y → y(...)`). Library-qualified calls (`requests.get()`, `subprocess.run()`, `os.system()`) produced **zero false positives** across all four repos. See [`validation/results.md`](validation/results.md) for full analysis.
 
 ---
 
@@ -145,7 +173,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 python -m pyvibe demo/bad_async.py
 ```
 
-Expected: 4 CRITICAL findings. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
+Expected: 11 CRITICAL findings, one per rule. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
 
 ---
 
@@ -157,7 +185,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-13 tests: true positives + false-positive guards for every rule.
+40 tests: true positives + false-positive guards for every rule.
 
 ---
 
