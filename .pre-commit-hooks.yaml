@@ -1,0 +1,8 @@
+- id: python-vibe-guard
+  name: python-vibe-guard
+  description: Detect runtime anti-patterns in async Python code (time.sleep, requests, asyncio.run, threading.Lock inside async def)
+  entry: pyvibe
+  language: python
+  types: [python]
+  pass_filenames: false
+  args: ['.']

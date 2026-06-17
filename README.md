@@ -108,6 +108,28 @@ The scanner exits with code `1` when violations are found, failing the CI job.
 
 ---
 
+## Pre-commit integration
+
+Add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
+    rev: v0.1.0
+    hooks:
+      - id: python-vibe-guard
+```
+
+Then install the hook:
+
+```bash
+pre-commit install
+```
+
+The hook runs on every `git commit`, scans all Python files in the project, and blocks the commit if any violations are found.
+
+---
+
 ## Design
 
 - **Pure AST, zero runtime dependencies** — uses only Python's built-in `ast` module
