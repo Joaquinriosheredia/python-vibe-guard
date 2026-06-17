@@ -42,7 +42,7 @@ class AsyncRequestsRule(ast.NodeVisitor):
                 line=node.lineno,
                 function_name=self._current_async_func,
                 message=f"requests.{method}() is synchronous — blocks the event loop",
-                evidence="Use `async with httpx.AsyncClient() as c: await c.{method}(url)`",
+                evidence=f"Use `async with httpx.AsyncClient() as c: await c.{method}(url)`",
             ))
 
         self.generic_visit(node)
