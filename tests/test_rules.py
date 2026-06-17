@@ -178,6 +178,51 @@ async def clean_handler():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
+
+def test_006_detects_contextvar_set_without_cleanup():
+    src = """
+from contextvars import ContextVar
+request_id = ContextVar('request_id')
+
+async def handle_request():
+    request_id.set('abc-123')
+    await process()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-006"
+    assert violations[0].function_name == "handle_request"
+
+
+def test_006_no_false_positive_in_sync():
+    src = """
+from contextvars import ContextVar
+request_id = ContextVar('request_id')
+
+def sync_handler():
+    request_id.set('abc-123')
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_006_no_flag_with_try_finally_reset():
+    src = """
+from contextvars import ContextVar
+request_id = ContextVar('request_id')
+
+async def handle_request():
+    token = request_id.set('abc-123')
+    try:
+        await process()
+    finally:
+        request_id.reset(token)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

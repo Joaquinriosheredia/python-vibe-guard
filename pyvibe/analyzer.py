@@ -7,12 +7,14 @@ from pyvibe.rules.async_sleep import AsyncSleepRule
 from pyvibe.rules.async_requests import AsyncRequestsRule
 from pyvibe.rules.asyncio_run import AsyncioRunRule
 from pyvibe.rules.threading_lock import ThreadingLockRule
+from pyvibe.rules.contextvar_cleanup import ContextVarCleanupRule
 
 ALL_RULES = [
     AsyncSleepRule,
     AsyncRequestsRule,
     AsyncioRunRule,
     ThreadingLockRule,
+    ContextVarCleanupRule,
 ]
 
 
