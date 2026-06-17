@@ -302,6 +302,43 @@ async def async_process(path):
     assert len(violations) == 0
 
 
+# ─── PYVIBE-008 ──────────────────────────────────────────────────────────────
+
+def test_008_detects_sqlite3_connect_in_async():
+    src = """
+import sqlite3
+async def get_users():
+    conn = sqlite3.connect("db.sqlite3")
+    return conn.cursor().fetchall()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-008"
+    assert violations[0].function_name == "get_users"
+
+
+def test_008_no_false_positive_in_sync():
+    src = """
+import sqlite3
+def sync_get_users():
+    conn = sqlite3.connect("db.sqlite3")
+    return conn.cursor().fetchall()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_008_no_false_positive_aiosqlite():
+    src = """
+import aiosqlite
+async def async_get_users():
+    async with aiosqlite.connect("db.sqlite3") as db:
+        return await db.execute("SELECT * FROM users")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
 
 def test_006_detects_contextvar_set_without_cleanup():
