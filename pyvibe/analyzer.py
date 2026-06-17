@@ -13,6 +13,7 @@ from pyvibe.rules.subprocess_async import SubprocessAsyncRule
 from pyvibe.rules.sqlite_async import SqliteAsyncRule
 from pyvibe.rules.open_async import OpenAsyncRule
 from pyvibe.rules.httpx_sync import HttpxSyncRule
+from pyvibe.rules.os_blocking import OsBlockingRule
 
 ALL_RULES = [
     AsyncSleepRule,
@@ -24,6 +25,7 @@ ALL_RULES = [
     SqliteAsyncRule,
     OpenAsyncRule,
     HttpxSyncRule,
+    OsBlockingRule,
     ContextVarCleanupRule,
 ]
 

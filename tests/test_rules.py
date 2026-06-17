@@ -376,6 +376,41 @@ async def async_read():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-011 ──────────────────────────────────────────────────────────────
+
+def test_011_detects_os_system_in_async():
+    src = """
+import os
+async def run_script():
+    os.system("python script.py")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-011"
+    assert violations[0].function_name == "run_script"
+
+
+def test_011_detects_os_popen_in_async():
+    src = """
+import os
+async def get_output():
+    result = os.popen("ls -la").read()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-011"
+
+
+def test_011_no_false_positive_in_sync():
+    src = """
+import os
+def sync_run():
+    os.system("python script.py")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-010 ──────────────────────────────────────────────────────────────
 
 def test_010_detects_httpx_get_in_async():
