@@ -4,6 +4,9 @@
 
 A FastAPI service that handled 50 concurrent requests in staging started timing out in production at 200 rps. The team spent two days adding replicas, tweaking Gunicorn workers, and profiling CPU — nothing helped. The p99 latency was 8 seconds for an endpoint that should take 80ms.
 
+> Scenario based on a common pattern observed in async Python codebases.
+> Reproduced in controlled testing with locust against a FastAPI service.
+
 Root cause: one engineer had asked an AI assistant to "add a retry with backoff" to an async handler. The AI generated `time.sleep(2)` inside the `async def`. In staging with a handful of requests it was invisible. In production it froze the entire event loop for 2 seconds per request, serializing all 200 concurrent calls through a single bottleneck.
 
 The code passed every unit test. It passed the integration tests. It shipped to production in a Friday deploy.
