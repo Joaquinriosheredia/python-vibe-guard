@@ -178,6 +178,73 @@ async def clean_handler():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-005 ──────────────────────────────────────────────────────────────
+
+def test_005_detects_app_task_without_time_limit():
+    src = """
+@app.task
+def process_payment(order_id):
+    return external_api.charge(order_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-005"
+    assert violations[0].function_name == "process_payment"
+
+
+def test_005_detects_shared_task_without_time_limit():
+    src = """
+@shared_task
+def send_email(user_id):
+    email_service.send(user_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-005"
+    assert violations[0].function_name == "send_email"
+
+
+def test_005_no_false_positive_with_soft_time_limit():
+    src = """
+@app.task(soft_time_limit=30)
+def process_payment(order_id):
+    return external_api.charge(order_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_005_no_false_positive_with_time_limit():
+    src = """
+@app.task(time_limit=120)
+def send_email(user_id):
+    email_service.send(user_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_005_detects_empty_parens_no_limit():
+    src = """
+@shared_task()
+def generate_report(report_id):
+    return heavy_computation(report_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-005"
+
+
+def test_005_no_false_positive_with_both_limits():
+    src = """
+@app.task(soft_time_limit=30, time_limit=60)
+def process_payment(order_id):
+    return external_api.charge(order_id)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
 
 def test_006_detects_contextvar_set_without_cleanup():

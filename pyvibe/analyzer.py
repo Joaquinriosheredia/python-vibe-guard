@@ -8,12 +8,14 @@ from pyvibe.rules.async_requests import AsyncRequestsRule
 from pyvibe.rules.asyncio_run import AsyncioRunRule
 from pyvibe.rules.threading_lock import ThreadingLockRule
 from pyvibe.rules.contextvar_cleanup import ContextVarCleanupRule
+from pyvibe.rules.celery_time_limit import CeleryTaskTimeLimitRule
 
 ALL_RULES = [
     AsyncSleepRule,
     AsyncRequestsRule,
     AsyncioRunRule,
     ThreadingLockRule,
+    CeleryTaskTimeLimitRule,
     ContextVarCleanupRule,
 ]
 
