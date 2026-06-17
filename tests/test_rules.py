@@ -339,6 +339,43 @@ async def async_get_users():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-009 ──────────────────────────────────────────────────────────────
+
+def test_009_detects_open_in_async():
+    src = """
+import json
+async def read_config():
+    with open("config.json") as f:
+        return json.load(f)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-009"
+    assert violations[0].function_name == "read_config"
+
+
+def test_009_no_false_positive_in_sync():
+    src = """
+import json
+def sync_read():
+    with open("config.json") as f:
+        return json.load(f)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_009_no_false_positive_aiofiles():
+    src = """
+import aiofiles
+async def async_read():
+    async with aiofiles.open("config.json") as f:
+        return await f.read()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
 
 def test_006_detects_contextvar_set_without_cleanup():
