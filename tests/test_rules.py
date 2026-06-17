@@ -245,6 +245,63 @@ def process_payment(order_id):
     assert len(violations) == 0
 
 
+# ─── PYVIBE-007 ──────────────────────────────────────────────────────────────
+
+def test_007_detects_subprocess_run_in_async():
+    src = """
+import subprocess
+async def process_file(path):
+    subprocess.run(["ffmpeg", "-i", path, "output.mp4"])
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].function_name == "process_file"
+
+
+def test_007_detects_subprocess_popen_in_async():
+    src = """
+import subprocess
+async def get_output():
+    proc = subprocess.Popen(["git", "log"], stdout=-1)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_detects_bare_import_in_async():
+    src = """
+from subprocess import check_output
+async def get_output():
+    result = check_output(["git", "log"])
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_no_false_positive_in_sync():
+    src = """
+import subprocess
+def sync_process(path):
+    subprocess.run(["ffmpeg", "-i", path])
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_007_no_false_positive_asyncio_subprocess():
+    src = """
+import asyncio
+async def async_process(path):
+    proc = await asyncio.create_subprocess_exec("ffmpeg", "-i", path)
+    await proc.communicate()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
 
 def test_006_detects_contextvar_set_without_cleanup():
