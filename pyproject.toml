@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-vibe-guard"
+version = "0.1.0"
+description = "Runtime anti-pattern scanner for async Python — detects what AI-generated code gets wrong"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["async", "linter", "fastapi", "asyncio", "static-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Quality Assurance",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+pyvibe = "pyvibe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyvibe*"]
