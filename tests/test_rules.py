@@ -376,6 +376,53 @@ async def async_read():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-010 ──────────────────────────────────────────────────────────────
+
+def test_010_detects_httpx_get_in_async():
+    src = """
+import httpx
+async def fetch_data():
+    response = httpx.get("https://api.example.com/data")
+    return response.json()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-010"
+    assert violations[0].function_name == "fetch_data"
+
+
+def test_010_detects_httpx_post_in_async():
+    src = """
+import httpx
+async def submit():
+    return httpx.post("https://api.example.com", json={"key": "value"})
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-010"
+
+
+def test_010_no_false_positive_in_sync():
+    src = """
+import httpx
+def sync_fetch():
+    return httpx.get("https://api.example.com")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_010_no_false_positive_async_client():
+    src = """
+import httpx
+async def async_fetch():
+    async with httpx.AsyncClient() as client:
+        return await client.get("https://api.example.com")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-006 ──────────────────────────────────────────────────────────────
 
 def test_006_detects_contextvar_set_without_cleanup():

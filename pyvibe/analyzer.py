@@ -12,6 +12,7 @@ from pyvibe.rules.celery_time_limit import CeleryTaskTimeLimitRule
 from pyvibe.rules.subprocess_async import SubprocessAsyncRule
 from pyvibe.rules.sqlite_async import SqliteAsyncRule
 from pyvibe.rules.open_async import OpenAsyncRule
+from pyvibe.rules.httpx_sync import HttpxSyncRule
 
 ALL_RULES = [
     AsyncSleepRule,
@@ -22,6 +23,7 @@ ALL_RULES = [
     SubprocessAsyncRule,
     SqliteAsyncRule,
     OpenAsyncRule,
+    HttpxSyncRule,
     ContextVarCleanupRule,
 ]
 
