@@ -11,6 +11,7 @@ import json
 import sys
 from pathlib import Path
 
+from pyvibe import __version__
 from pyvibe.analyzer import analyze_file, analyze_directory
 
 
@@ -19,6 +20,7 @@ def main():
         prog="pyvibe",
         description="Detect runtime anti-patterns in async Python code",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("path", help="File or directory to scan")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
