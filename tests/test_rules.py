@@ -551,7 +551,7 @@ import asyncio
 
 async def handler():
     tasks = [asyncio.create_task(f()) for f in fns]
-    await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks, return_exceptions=True)
 """
     violations = analyze_source(src)
     assert len(violations) == 0
@@ -600,6 +600,84 @@ async def handler():
 """
     violations = analyze_source(src)
     assert len(violations) == 0
+
+
+# ─── PYVIBE-013 ──────────────────────────────────────────────────────────────
+
+def test_013_detects_gather_without_return_exceptions():
+    src = """
+import asyncio
+
+async def handler():
+    await asyncio.gather(task1(), task2(), task3())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-013"
+    assert violations[0].function_name == "handler"
+
+
+def test_013_no_false_positive_with_return_exceptions_true():
+    src = """
+import asyncio
+
+async def handler():
+    results = await asyncio.gather(task1(), task2(), return_exceptions=True)
+    return results
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_013_no_false_positive_in_sync():
+    src = """
+import asyncio
+
+def sync_caller():
+    asyncio.gather(task1(), task2())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_013_flags_return_exceptions_false():
+    # Explicit False has the same broken behavior as the default — first
+    # exception propagates, remaining tasks leak. Flag it.
+    src = """
+import asyncio
+
+async def handler():
+    await asyncio.gather(task1(), task2(), return_exceptions=False)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-013"
+
+
+def test_013_no_false_positive_taskgroup():
+    src = """
+import asyncio
+
+async def handler():
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(task1())
+        tg.create_task(task2())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_013_detects_gather_without_await():
+    # gather() without return_exceptions is flagged even when not awaited
+    src = """
+import asyncio
+
+async def handler():
+    coro = asyncio.gather(task1(), task2())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-013"
 
 
 if __name__ == "__main__":
