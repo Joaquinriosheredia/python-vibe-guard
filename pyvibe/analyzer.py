@@ -34,6 +34,18 @@ ALL_RULES = [
 ]
 
 
+def _is_test_file(filepath: str) -> bool:
+    p = Path(filepath)
+    name = p.name
+    parts = p.parts
+    return (
+        name.startswith("test_")
+        or name.endswith("_test.py")
+        or "tests" in parts
+        or "test" in parts
+    )
+
+
 def analyze_source(source: str, filepath: str = "<string>") -> List[Violation]:
     """Parse source and run all rules. Returns list of violations."""
     try:
@@ -46,6 +58,11 @@ def analyze_source(source: str, filepath: str = "<string>") -> List[Violation]:
         visitor = RuleClass()
         visitor.visit(tree)
         violations.extend(visitor.violations)
+
+    if _is_test_file(filepath):
+        for v in violations:
+            if v.rule_id == "PYVIBE-013":
+                v.severity = "WARNING"
 
     violations.sort(key=lambda v: v.line)
     return violations
