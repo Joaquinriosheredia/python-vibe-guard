@@ -52,11 +52,30 @@ def analyze_file(path: Path) -> List[Violation]:
     return analyze_source(source, filepath=str(path))
 
 
-def analyze_directory(root: Path) -> dict:
-    """Walk directory and analyze all .py files. Returns {path: [violations]}."""
+DEFAULT_EXCLUDES = frozenset({
+    "venv", ".venv", "env", "__pycache__", ".git",
+    "node_modules", ".tox", "dist", "build", ".eggs",
+})
+
+
+def analyze_directory(root: Path, exclude: frozenset = DEFAULT_EXCLUDES) -> dict:
+    """Walk directory and analyze all .py files. Returns {path: [violations]}.
+
+    Directories whose *name* appears in `exclude` are skipped entirely.
+    """
     results = {}
-    for py_file in sorted(root.rglob("*.py")):
+    for py_file in _walk(root, exclude):
         violations = analyze_file(py_file)
         if violations:
             results[py_file] = violations
     return results
+
+
+def _walk(root: Path, exclude: frozenset):
+    """Yield .py files under root, skipping any directory in exclude."""
+    for entry in sorted(root.iterdir()):
+        if entry.is_dir():
+            if entry.name not in exclude:
+                yield from _walk(entry, exclude)
+        elif entry.suffix == ".py":
+            yield entry

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from pyvibe import __version__
-from pyvibe.analyzer import analyze_file, analyze_directory
+from pyvibe.analyzer import analyze_file, analyze_directory, DEFAULT_EXCLUDES
 
 
 def main():
@@ -23,6 +23,17 @@ def main():
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("path", help="File or directory to scan")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--exclude",
+        metavar="DIR",
+        action="append",
+        default=[],
+        help=(
+            "Directory name to exclude (can be repeated). "
+            "Added on top of the built-in defaults: "
+            + ", ".join(sorted(DEFAULT_EXCLUDES))
+        ),
+    )
     args = parser.parse_args()
 
     target = Path(args.path)
@@ -30,10 +41,12 @@ def main():
         print(f"Error: {target} does not exist", file=sys.stderr)
         sys.exit(2)
 
+    exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
+
     if target.is_file():
         file_results = {target: analyze_file(target)} if target.suffix == ".py" else {}
     else:
-        file_results = analyze_directory(target)
+        file_results = analyze_directory(target, exclude=exclude)
 
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
