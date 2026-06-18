@@ -48,7 +48,9 @@ class AsyncRequestsRule(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _get_requests_method(self, node: ast.Call):
-        # requests.get(...), requests.post(...), etc.
+        # requests.get(...), requests.post(...), etc. — qualified form only
+        # Bare names (get, post, request…) excluded: too generic, cause FPs
+        # with aiohttp.request, httpx shortcuts, and other async APIs.
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr in REQUESTS_METHODS
@@ -56,9 +58,5 @@ class AsyncRequestsRule(ast.NodeVisitor):
             and node.func.value.id == "requests"
         ):
             return node.func.attr
-
-        # from requests import get → get(...)
-        if isinstance(node.func, ast.Name) and node.func.id in REQUESTS_METHODS:
-            return node.func.id
 
         return None

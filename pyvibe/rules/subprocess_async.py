@@ -50,7 +50,9 @@ class SubprocessAsyncRule(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _get_subprocess_method(self, node: ast.Call):
-        # subprocess.run(...), subprocess.Popen(...), etc.
+        # subprocess.run(...), subprocess.Popen(...), etc. — qualified form only
+        # Bare names (run, call…) excluded: 'call' is too generic and caused a
+        # false positive in FastAPI where 'call' is a local dependency variable.
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr in SUBPROCESS_BLOCKING
@@ -58,9 +60,5 @@ class SubprocessAsyncRule(ast.NodeVisitor):
             and node.func.value.id == "subprocess"
         ):
             return node.func.attr
-
-        # from subprocess import run → run(...)
-        if isinstance(node.func, ast.Name) and node.func.id in SUBPROCESS_BLOCKING:
-            return node.func.id
 
         return None

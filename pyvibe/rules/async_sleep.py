@@ -45,17 +45,10 @@ class AsyncSleepRule(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _is_time_sleep(self, node: ast.Call) -> bool:
-        # time.sleep(n)
-        if (
+        # time.sleep(n) — qualified form only; bare sleep() excluded (false positives)
+        return (
             isinstance(node.func, ast.Attribute)
             and node.func.attr == "sleep"
             and isinstance(node.func.value, ast.Name)
             and node.func.value.id == "time"
-        ):
-            return True
-
-        # from time import sleep → sleep(n)
-        if isinstance(node.func, ast.Name) and node.func.id == "sleep":
-            return True
-
-        return False
+        )

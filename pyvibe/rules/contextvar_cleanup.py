@@ -38,17 +38,21 @@ class ContextVarCleanupRule(ast.NodeVisitor):
         previous = self._current_async_func
         self._current_async_func = node.name
 
-        set_calls = self._find_set_calls(node)
-        if set_calls and not self._has_finally_reset(node):
-            first = set_calls[0]
-            self.violations.append(Violation(
-                rule_id=self.RULE_ID,
-                severity=self.SEVERITY,
-                line=first.lineno,
-                function_name=node.name,
-                message="ContextVar.set() without guaranteed cleanup leaks state between async tasks",
-                evidence="Capture the token: `token = var.set(v)` then call `var.reset(token)` in a finally block",
-            ))
+        # Async generators (FastAPI yield dependencies) use yield semantics for
+        # cleanup — the code after yield runs on teardown. Skip them to avoid
+        # false positives on the common `token = var.set(v); yield; var.reset(token)` pattern.
+        if not self._is_async_generator(node):
+            set_calls = self._find_set_calls(node)
+            if set_calls and not self._has_finally_reset(node):
+                first = set_calls[0]
+                self.violations.append(Violation(
+                    rule_id=self.RULE_ID,
+                    severity=self.SEVERITY,
+                    line=first.lineno,
+                    function_name=node.name,
+                    message="ContextVar.set() without guaranteed cleanup leaks state between async tasks",
+                    evidence="Capture the token: `token = var.set(v)` then call `var.reset(token)` in a finally block",
+                ))
 
         self.generic_visit(node)
         self._current_async_func = previous
@@ -102,6 +106,13 @@ class ContextVarCleanupRule(ast.NodeVisitor):
             ):
                 calls.append(node)
         return calls
+
+    def _is_async_generator(self, func_node: ast.AsyncFunctionDef) -> bool:
+        """True if the function contains a yield — async generator or FastAPI dependency."""
+        for node in _shallow_walk(func_node):
+            if isinstance(node, (ast.Yield, ast.YieldFrom)):
+                return True
+        return False
 
     def _has_finally_reset(self, func_node: ast.AsyncFunctionDef) -> bool:
         """Return True if the function body contains a try/finally with a .reset() call."""
