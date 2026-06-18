@@ -48,24 +48,37 @@ Rules PYVIBE-001–004, 006–016 fire **only inside `async def`**. PYVIBE-005 f
 
 ## Validation
 
-Scanned against 4 production Python repos with pyvibe v0.4.0 (16 rules, shallow clone):
+Scanned against 4 production Python repos with pyvibe v0.4.0 (16 rules, shallow clone, `python -m pyvibe <repo> --json`):
 
-| Repo | .py files | Violations | Notes |
-|------|-----------|-----------|-------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 0 | Framework core; async handlers live in user apps |
-| [celery/celery](https://github.com/celery/celery) | 416 | 352 | 352 real (PYVIBE-005 — internal tasks without time limits) |
-| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 27 | Mixed real + test context |
-| [encode/httpx](https://github.com/encode/httpx) | 60 | 0 | Sync client is the intended API here |
-| **Total** | **1 761** | **379** | |
+| Repo | .py files | Violations |
+|------|-----------|-----------|
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 0 |
+| [celery/celery](https://github.com/celery/celery) | 416 | 352 |
+| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 27 |
+| [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
+| **Total** | **1 761** | **379** |
 
-Raw scan data: [`validation/breakdown.json`](validation/breakdown.json)  
-Historical 89-repo scan (v0.3.0, 1 053 violations): [`validation/massive-results.md`](validation/massive-results.md)
+**By rule (rules with 0 hits omitted):**
 
-**Real bugs found:**
+| Rule | Hits | Repo |
+|------|------|------|
+| PYVIBE-001 | 1 | aiohttp |
+| PYVIBE-005 | 352 | celery |
+| PYVIBE-006 | 2 | aiohttp |
+| PYVIBE-009 | 4 | aiohttp |
+| PYVIBE-013 | 20 | aiohttp |
 
-- **Celery `celery/app/builtins.py`** — internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, and 9 others) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
+Rules PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits across these four repos. PYVIBE-014/015/016 target application code patterns (orphaned futures, `run_until_complete` inside async, sync httpx client), not framework internals — these repos are the frameworks themselves.
+
+Raw scan data: [`validation/breakdown.json`](validation/breakdown.json)
+
+**Real findings:**
+
+- **Celery `celery/app/builtins.py`** — 12 internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, and others) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
 
 - **aiohttp `examples/web_ws.py`** — `open()` called inside an async WebSocket handler in the official aiohttp examples directory. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
+
+- **aiohttp** — 20 `asyncio.gather()` calls without `return_exceptions=True`. In test files these are downgraded to WARNING automatically; in production async handlers they remain CRITICAL. Detected by PYVIBE-013.
 
 ---
 
