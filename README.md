@@ -1,5 +1,7 @@
 # python-vibe-guard
 
+[![tests](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml)
+
 ## The incident
 
 A FastAPI service that handled 50 concurrent requests in staging started timing out in production at 200 rps. The team spent two days adding replicas, tweaking Gunicorn workers, and profiling CPU — nothing helped. The p99 latency was 8 seconds for an endpoint that should take 80ms.
