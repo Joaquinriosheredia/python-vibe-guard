@@ -187,7 +187,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-40 tests: true positives + false-positive guards for every rule.
+41 tests: true positives + false-positive guards for every rule.
 
 ---
 
