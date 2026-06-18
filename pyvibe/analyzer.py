@@ -16,6 +16,9 @@ from pyvibe.rules.httpx_sync import HttpxSyncRule
 from pyvibe.rules.os_blocking import OsBlockingRule
 from pyvibe.rules.create_task_orphan import CreateTaskOrphanRule
 from pyvibe.rules.gather_no_return_exceptions import GatherNoReturnExceptionsRule
+from pyvibe.rules.ensure_future_orphan import EnsureFutureOrphanRule
+from pyvibe.rules.loop_run_until_complete import LoopRunUntilCompleteRule
+from pyvibe.rules.httpx_client_sync import HttpxClientSyncRule
 
 ALL_RULES = [
     AsyncSleepRule,
@@ -31,6 +34,9 @@ ALL_RULES = [
     ContextVarCleanupRule,
     CreateTaskOrphanRule,
     GatherNoReturnExceptionsRule,
+    EnsureFutureOrphanRule,
+    LoopRunUntilCompleteRule,
+    HttpxClientSyncRule,
 ]
 
 

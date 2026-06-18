@@ -680,6 +680,164 @@ async def handler():
     assert violations[0].rule_id == "PYVIBE-013"
 
 
+# ─── PYVIBE-014 ──────────────────────────────────────────────────────────────
+
+def test_014_detects_ensure_future_orphan():
+    src = """
+import asyncio
+
+async def handler():
+    asyncio.ensure_future(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-014"
+    assert violations[0].function_name == "handler"
+
+
+def test_014_no_false_positive_with_assignment():
+    src = """
+import asyncio
+
+async def handler():
+    task = asyncio.ensure_future(coro())
+    await task
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-014" for v in violations)
+
+
+def test_014_no_false_positive_in_sync():
+    src = """
+import asyncio
+
+def sync_caller():
+    asyncio.ensure_future(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_014_no_false_positive_in_list():
+    src = """
+import asyncio
+
+async def handler():
+    tasks = [asyncio.ensure_future(c()) for c in coros]
+    await asyncio.gather(*tasks, return_exceptions=True)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-014" for v in violations)
+
+
+# ─── PYVIBE-015 ──────────────────────────────────────────────────────────────
+
+def test_015_detects_loop_run_until_complete():
+    src = """
+import asyncio
+
+async def handler():
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-015"
+    assert violations[0].function_name == "handler"
+
+
+def test_015_no_false_positive_in_sync():
+    src = """
+import asyncio
+
+def sync_main():
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_015_detects_any_variable_name():
+    src = """
+import asyncio
+
+async def handler():
+    event_loop = asyncio.new_event_loop()
+    event_loop.run_until_complete(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-015"
+
+
+def test_015_detects_result_used():
+    # run_until_complete assigned to a variable is still wrong inside async def
+    src = """
+import asyncio
+
+async def handler():
+    loop = asyncio.get_event_loop()
+    result = loop.run_until_complete(coro())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-015"
+
+
+# ─── PYVIBE-016 ──────────────────────────────────────────────────────────────
+
+def test_016_detects_httpx_client_in_async():
+    src = """
+import httpx
+
+async def handler():
+    client = httpx.Client()
+    response = client.get("https://example.com")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-016"
+    assert violations[0].function_name == "handler"
+
+
+def test_016_no_false_positive_async_client():
+    src = """
+import httpx
+
+async def handler():
+    async with httpx.AsyncClient() as client:
+        response = await client.get("https://example.com")
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-016" for v in violations)
+
+
+def test_016_no_false_positive_in_sync():
+    src = """
+import httpx
+
+def sync_handler():
+    client = httpx.Client()
+    response = client.get("https://example.com")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_016_detects_inline_instantiation():
+    # Client created inline without assignment is still flagged
+    src = """
+import httpx
+
+async def handler():
+    response = httpx.Client().get("https://example.com")
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-016"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0
