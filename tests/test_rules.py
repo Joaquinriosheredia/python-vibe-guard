@@ -838,6 +838,167 @@ async def handler():
     assert violations[0].rule_id == "PYVIBE-016"
 
 
+# ─── Fix 1: test-file downgrade extended to PYVIBE-001 and PYVIBE-007 ────────
+
+def test_001_downgraded_to_warning_in_test_file():
+    src = """
+import time
+
+async def setup():
+    time.sleep(0.1)
+"""
+    violations = analyze_source(src, "test_something.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-001"
+    assert violations[0].severity == "WARNING"
+
+
+def test_001_still_critical_in_production_file():
+    src = """
+import time
+
+async def handler():
+    time.sleep(1)
+"""
+    violations = analyze_source(src, "app/handlers.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-001"
+    assert violations[0].severity == "CRITICAL"
+
+
+def test_007_downgraded_to_warning_in_tests_dir():
+    src = """
+import subprocess
+
+async def start_service():
+    subprocess.run(["uvicorn", "app:app"])
+"""
+    violations = analyze_source(src, "tests/conftest.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].severity == "WARNING"
+
+
+def test_007_still_critical_in_production_file():
+    src = """
+import subprocess
+
+async def handler():
+    subprocess.run(["convert", "input.jpg", "output.png"])
+"""
+    violations = analyze_source(src, "app/worker.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].severity == "CRITICAL"
+
+
+# ─── Fix 2: downgrade_in_tests and skip_test_files API ───────────────────────
+
+def test_downgrade_all_rules_in_test_file():
+    from pyvibe.analyzer import ALL_RULE_IDS
+    src = """
+import time
+
+async def setup():
+    time.sleep(0.1)
+"""
+    violations = analyze_source(src, "test_something.py", downgrade_in_tests=ALL_RULE_IDS)
+    assert len(violations) == 1
+    assert violations[0].severity == "WARNING"
+
+
+def test_no_downgrade_when_empty_set():
+    src = """
+import time
+
+async def setup():
+    time.sleep(0.1)
+"""
+    violations = analyze_source(src, "test_something.py", downgrade_in_tests=frozenset())
+    assert len(violations) == 1
+    assert violations[0].severity == "CRITICAL"
+
+
+def test_skip_test_files_excludes_test_file(tmp_path):
+    from pyvibe.analyzer import analyze_directory
+    test_file = tmp_path / "test_something.py"
+    test_file.write_text(
+        "import time\nasync def setup():\n    time.sleep(0.1)\n"
+    )
+    results = analyze_directory(tmp_path, skip_test_files=True)
+    assert len(results) == 0
+
+
+def test_skip_test_files_keeps_production_file(tmp_path):
+    from pyvibe.analyzer import analyze_directory
+    prod_file = tmp_path / "handler.py"
+    prod_file.write_text(
+        "import time\nasync def handler():\n    time.sleep(1)\n"
+    )
+    results = analyze_directory(tmp_path, skip_test_files=True)
+    assert len(results) == 1
+
+
+def test_skip_test_files_false_keeps_test_file(tmp_path):
+    from pyvibe.analyzer import analyze_directory
+    test_file = tmp_path / "test_something.py"
+    test_file.write_text(
+        "import time\nasync def setup():\n    time.sleep(0.1)\n"
+    )
+    results = analyze_directory(tmp_path, skip_test_files=False)
+    assert len(results) == 1
+
+
+# ─── Fix 3: threading.Event excluded from PYVIBE-004 ─────────────────────────
+
+def test_004_no_false_positive_threading_event():
+    src = """
+import threading
+
+async def handler():
+    event = threading.Event()
+    event.set()
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-004" for v in violations)
+
+
+def test_004_no_false_positive_event_bare_import():
+    src = """
+from threading import Event
+
+async def handler():
+    ev = Event()
+    ev.wait(timeout=1.0)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-004" for v in violations)
+
+
+def test_004_still_detects_lock_after_event_exclusion():
+    src = """
+import threading
+
+async def handler():
+    lock = threading.Lock()
+    with lock:
+        pass
+"""
+    violations = analyze_source(src)
+    assert any(v.rule_id == "PYVIBE-004" for v in violations)
+
+
+def test_004_still_detects_condition_after_event_exclusion():
+    src = """
+import threading
+
+async def handler():
+    cond = threading.Condition()
+"""
+    violations = analyze_source(src)
+    assert any(v.rule_id == "PYVIBE-004" for v in violations)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

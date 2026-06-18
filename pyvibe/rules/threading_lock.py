@@ -2,7 +2,10 @@ import ast
 from typing import List
 from pyvibe.rules.base import Violation
 
-THREADING_PRIMITIVES = {"Lock", "RLock", "Semaphore", "BoundedSemaphore", "Event", "Condition"}
+# threading.Event is a signalling primitive (set/wait), not a lock — it does not
+# block the event loop in the same way and is legitimately used as a sync↔async
+# bridge (e.g. signalling a Playwright or subprocess thread). Excluded deliberately.
+THREADING_PRIMITIVES = {"Lock", "RLock", "Semaphore", "BoundedSemaphore", "Condition"}
 
 
 class ThreadingLockRule(ast.NodeVisitor):

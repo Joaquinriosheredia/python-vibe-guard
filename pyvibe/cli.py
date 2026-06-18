@@ -3,8 +3,10 @@
 python-vibe-guard — runtime anti-pattern scanner for async Python
 
 Usage:
-    python -m pyvibe <path>          # file or directory
-    python -m pyvibe <path> --json   # machine-readable output
+    python -m pyvibe <path>                   # file or directory
+    python -m pyvibe <path> --json            # machine-readable output
+    python -m pyvibe <path> --no-test-files   # skip test files entirely
+    python -m pyvibe <path> --downgrade-in-tests  # WARNING instead of CRITICAL in all test files
 """
 import argparse
 import json
@@ -12,7 +14,14 @@ import sys
 from pathlib import Path
 
 from pyvibe import __version__
-from pyvibe.analyzer import analyze_file, analyze_directory, DEFAULT_EXCLUDES
+from pyvibe.analyzer import (
+    analyze_file,
+    analyze_directory,
+    DEFAULT_EXCLUDES,
+    ALL_RULE_IDS,
+    TEST_FILE_DOWNGRADE,
+    _is_test_file,
+)
 
 
 def main():
@@ -34,6 +43,22 @@ def main():
             + ", ".join(sorted(DEFAULT_EXCLUDES))
         ),
     )
+    parser.add_argument(
+        "--no-test-files",
+        action="store_true",
+        help=(
+            "Exclude test files from the scan entirely "
+            "(files matching test_*.py, *_test.py, or under tests/ / test/)"
+        ),
+    )
+    parser.add_argument(
+        "--downgrade-in-tests",
+        action="store_true",
+        help=(
+            "Downgrade ALL violations in test files from CRITICAL to WARNING. "
+            "Default: only PYVIBE-001, PYVIBE-007, and PYVIBE-013 are downgraded."
+        ),
+    )
     args = parser.parse_args()
 
     target = Path(args.path)
@@ -43,10 +68,31 @@ def main():
 
     exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
 
-    if target.is_file():
-        file_results = {target: analyze_file(target)} if target.suffix == ".py" else {}
+    # Resolve test-file handling flags (mutually exclusive in effect)
+    if args.no_test_files:
+        skip_test_files = True
+        downgrade_in_tests = frozenset()
+    elif args.downgrade_in_tests:
+        skip_test_files = False
+        downgrade_in_tests = ALL_RULE_IDS
     else:
-        file_results = analyze_directory(target, exclude=exclude)
+        skip_test_files = False
+        downgrade_in_tests = TEST_FILE_DOWNGRADE
+
+    if target.is_file():
+        if target.suffix != ".py":
+            file_results = {}
+        elif skip_test_files and _is_test_file(str(target)):
+            file_results = {}
+        else:
+            file_results = {target: analyze_file(target, downgrade_in_tests=downgrade_in_tests)}
+    else:
+        file_results = analyze_directory(
+            target,
+            exclude=exclude,
+            skip_test_files=skip_test_files,
+            downgrade_in_tests=downgrade_in_tests,
+        )
 
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
@@ -87,7 +133,7 @@ def _print_human(file_results: dict, total_violations: int, total_files: int):
         print(f"  {path}")
         print()
         for v in violations:
-            print(f"  [CRITICAL] [{v.rule_id}] — line {v.line}")
+            print(f"  [{v.severity}] [{v.rule_id}] — line {v.line}")
             print(f"     Function : {v.function_name}()")
             print(f"     Problem  : {v.message}")
             print(f"     Fix      : {v.evidence}")
