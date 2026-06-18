@@ -19,7 +19,7 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Thirteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Sixteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
 
 | Rule | Pattern | Gate | Runtime effect |
 |------|---------|------|----------------|
@@ -36,29 +36,36 @@ Thirteen patterns that AI models generate repeatedly, that pass all static check
 | PYVIBE-011 | `os.system/popen/waitpid` inside `async def` | `async def` | Blocking OS calls with no direct async equivalent |
 | PYVIBE-012 | `asyncio.create_task()` with discarded return value | `async def` | Task GC'd mid-execution; exceptions silently swallowed |
 | PYVIBE-013 | `asyncio.gather()` without `return_exceptions=True` | `async def` | First exception leaks remaining tasks; no per-task error handling |
+| PYVIBE-014 | `asyncio.ensure_future()` with discarded return value | `async def` | Same GC hazard as PYVIBE-012; pre-3.7 API still common in older codebases |
+| PYVIBE-015 | `loop.run_until_complete()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
+| PYVIBE-016 | `httpx.Client()` instantiated inside `async def` | `async def` | Sync client blocks OS thread per request; `httpx.AsyncClient()` is excluded |
 
-Rules PYVIBE-001–004, 006–013 fire **only inside `async def`**. PYVIBE-005 fires on the decorator regardless of whether the function body is async.
+Rules PYVIBE-001–004, 006–016 fire **only inside `async def`**. PYVIBE-005 fires on the decorator regardless of whether the function body is async.
+
+**PYVIBE-013 in test files:** `asyncio.gather()` without `return_exceptions=True` is intentional in test code — exceptions should propagate for assertions. pyvibe automatically downgrades this violation to `WARNING` (not `CRITICAL`) in files matching `test_*.py`, `*_test.py`, or paths under `tests/`.
 
 ---
 
 ## Validation
 
-Scanned against 4 production Python repos (shallow clone, `python -m pyvibe <repo> --json`):
+Scanned against 4 production Python repos with pyvibe v0.4.0 (16 rules, shallow clone):
 
-| Repo | .py files | Violations | Signal |
-|------|-----------|-----------|--------|
-| [fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 2 | 1 real, 1 FP |
-| [celery](https://github.com/celery/celery) | 416 | 352 | **352 real** (PYVIBE-005) |
-| [httpx](https://github.com/encode/httpx) | 60 | 2 | 2 FP |
-| [aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 30 | 5 real, 25 FP |
+| Repo | .py files | Violations | Notes |
+|------|-----------|-----------|-------|
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 0 | Framework core; async handlers live in user apps |
+| [celery/celery](https://github.com/celery/celery) | 416 | 352 | 352 real (PYVIBE-005 — internal tasks without time limits) |
+| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 27 | Mixed real + test context |
+| [encode/httpx](https://github.com/encode/httpx) | 60 | 0 | Sync client is the intended API here |
+| **Total** | **1 761** | **379** | |
+
+Raw scan data: [`validation/breakdown.json`](validation/breakdown.json)  
+Historical 89-repo scan (v0.3.0, 1 053 violations): [`validation/massive-results.md`](validation/massive-results.md)
 
 **Real bugs found:**
 
-- **Celery `celery/app/builtins.py`** — 9 internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, …) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
+- **Celery `celery/app/builtins.py`** — internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, and 9 others) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
 
-- **aiohttp `examples/web_ws.py:20`** — `open()` called inside an async WebSocket handler in the official aiohttp examples directory. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
-
-**False positives:** All come from bare-name detection (`from x import y → y(...)`). Library-qualified calls (`requests.get()`, `subprocess.run()`, `os.system()`) produced **zero false positives** across all four repos. See [`validation/results.md`](validation/results.md) for full analysis.
+- **aiohttp `examples/web_ws.py`** — `open()` called inside an async WebSocket handler in the official aiohttp examples directory. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
 
 ---
 
@@ -87,6 +94,9 @@ python -m pyvibe src/
 
 # JSON output for CI/CD pipelines
 python -m pyvibe src/ --json
+
+# Exclude directories (adds to built-in defaults: venv, .venv, __pycache__, …)
+python -m pyvibe src/ --exclude tests
 
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
@@ -147,7 +157,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: python-vibe-guard
 ```
@@ -168,16 +178,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 - **Each rule is an independent `ast.NodeVisitor`** — easy to add, disable, or extend
 - **Gate on `async def`** — every rule checks `_current_async_func` before firing; sync context is never flagged
 - **No import resolution** — works on any Python file without installing its dependencies
-
----
-
-## Run the demo
-
-```bash
-python -m pyvibe demo/bad_async.py
-```
-
-Expected: 13 CRITICAL findings, one per rule. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
+- **Test-aware severity** — PYVIBE-013 is automatically downgraded to WARNING in test files
 
 ---
 
@@ -189,7 +190,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-64 tests: true positives + false-positive guards for every rule.
+76 tests: true positives + false-positive guards for every rule.
 
 ---
 

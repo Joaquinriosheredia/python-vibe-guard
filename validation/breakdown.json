@@ -1,0 +1,122 @@
+{
+  "_note": "Generated 2026-06-18 from 4 cloned repos with pyvibe v0.4.0 (16 rules). Historical 89-repo scan in validation/massive-results.md.",
+  "scanner_version": "0.4.0",
+  "scan_date": "2026-06-18",
+  "total_repos": 4,
+  "total_py_files": 1761,
+  "total_violations": 379,
+  "repos": {
+    "fastapi": {
+      "url": "https://github.com/tiangolo/fastapi",
+      "py_files": 1121,
+      "violations": 0
+    },
+    "celery": {
+      "url": "https://github.com/celery/celery",
+      "py_files": 416,
+      "violations": 352
+    },
+    "aiohttp": {
+      "url": "https://github.com/aio-libs/aiohttp",
+      "py_files": 164,
+      "violations": 27
+    },
+    "httpx": {
+      "url": "https://github.com/encode/httpx",
+      "py_files": 60,
+      "violations": 0
+    }
+  },
+  "by_rule": {
+    "PYVIBE-001": {
+      "count": 1,
+      "repos_affected": [
+        "aiohttp"
+      ],
+      "repos_affected_count": 1
+    },
+    "PYVIBE-002": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-003": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-004": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-005": {
+      "count": 352,
+      "repos_affected": [
+        "celery"
+      ],
+      "repos_affected_count": 1
+    },
+    "PYVIBE-006": {
+      "count": 2,
+      "repos_affected": [
+        "aiohttp"
+      ],
+      "repos_affected_count": 1
+    },
+    "PYVIBE-007": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-008": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-009": {
+      "count": 4,
+      "repos_affected": [
+        "aiohttp"
+      ],
+      "repos_affected_count": 1
+    },
+    "PYVIBE-010": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-011": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-012": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-013": {
+      "count": 20,
+      "repos_affected": [
+        "aiohttp"
+      ],
+      "repos_affected_count": 1
+    },
+    "PYVIBE-014": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-015": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    },
+    "PYVIBE-016": {
+      "count": 0,
+      "repos_affected": [],
+      "repos_affected_count": 0
+    }
+  }
+}
