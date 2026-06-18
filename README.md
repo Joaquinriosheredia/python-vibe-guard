@@ -182,6 +182,16 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 
 ---
 
+## Run the demo
+
+```bash
+python -m pyvibe demo/bad_async.py
+```
+
+Expected: 16 CRITICAL findings, one per rule. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
+
+---
+
 ## Run the tests
 
 ```bash

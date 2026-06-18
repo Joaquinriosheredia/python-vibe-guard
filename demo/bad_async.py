@@ -1,7 +1,7 @@
 """
-demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-013).
+demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-016).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 13 CRITICAL findings.
+Expected: 16 CRITICAL findings.
 
 The sync_function() at the bottom uses the same calls in a sync context
 and should produce ZERO findings.
@@ -95,6 +95,23 @@ async def notify_user(user_id: int):
 async def fetch_all(urls: list):
     results = await asyncio.gather(*(fetch(u) for u in urls))  # missing return_exceptions=True
     return results
+
+
+# PYVIBE-014 — asyncio.ensure_future() return value discarded → task GC'd silently (pre-3.7 API)
+async def notify_legacy(user_id: int):
+    asyncio.ensure_future(send_email(user_id))  # orphaned: Future ref lost immediately
+
+
+# PYVIBE-015 — loop.run_until_complete() inside async def → RuntimeError at runtime
+async def bridge_sync(coro):
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(coro)  # event loop is already running — raises RuntimeError
+
+
+# PYVIBE-016 — httpx.Client() (sync) inside async def → blocks OS thread per request
+async def fetch_sync_client(url: str):
+    client = httpx.Client()  # sync client; every .get() blocks the event loop
+    return client.get(url).json()
 
 
 # ── Sync context — should produce ZERO findings ───────────────────────────────
