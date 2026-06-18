@@ -518,6 +518,90 @@ async def handle_request():
     assert len(violations) == 0
 
 
+# ─── PYVIBE-012 ──────────────────────────────────────────────────────────────
+
+def test_012_detects_orphan_create_task():
+    src = """
+import asyncio
+
+async def handler():
+    asyncio.create_task(send_email(user))
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-012"
+    assert violations[0].function_name == "handler"
+
+
+def test_012_no_false_positive_with_assignment():
+    src = """
+import asyncio
+
+async def handler():
+    task = asyncio.create_task(send_email(user))
+    await task
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_012_no_false_positive_in_list_comprehension():
+    src = """
+import asyncio
+
+async def handler():
+    tasks = [asyncio.create_task(f()) for f in fns]
+    await asyncio.gather(*tasks)
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_012_no_false_positive_in_return():
+    src = """
+import asyncio
+
+async def make_task():
+    return asyncio.create_task(background_work())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_012_no_false_positive_when_awaited():
+    src = """
+import asyncio
+
+async def handler():
+    await asyncio.create_task(send_email(user))
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_012_no_false_positive_in_sync():
+    src = """
+import asyncio
+
+def sync_caller():
+    asyncio.create_task(background())
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_012_no_false_positive_tg_create_task():
+    src = """
+import asyncio
+
+async def handler():
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(send_email(user))
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0
