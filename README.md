@@ -19,7 +19,7 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Eleven patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Thirteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
 
 | Rule | Pattern | Gate | Runtime effect |
 |------|---------|------|----------------|
@@ -34,8 +34,10 @@ Eleven patterns that AI models generate repeatedly, that pass all static checks,
 | PYVIBE-009 | `open()` builtin inside `async def` | `async def` | Synchronous file I/O blocks the event loop |
 | PYVIBE-010 | `httpx.get/post/put/…` inside `async def` | `async def` | httpx sync API blocks OS thread for full HTTP round-trip |
 | PYVIBE-011 | `os.system/popen/waitpid` inside `async def` | `async def` | Blocking OS calls with no direct async equivalent |
+| PYVIBE-012 | `asyncio.create_task()` with discarded return value | `async def` | Task GC'd mid-execution; exceptions silently swallowed |
+| PYVIBE-013 | `asyncio.gather()` without `return_exceptions=True` | `async def` | First exception leaks remaining tasks; no per-task error handling |
 
-Rules PYVIBE-001–004, 006–011 fire **only inside `async def`**. PYVIBE-005 fires on the decorator regardless of whether the function body is async.
+Rules PYVIBE-001–004, 006–013 fire **only inside `async def`**. PYVIBE-005 fires on the decorator regardless of whether the function body is async.
 
 ---
 
@@ -145,7 +147,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.1.0
+    rev: v0.3.0
     hooks:
       - id: python-vibe-guard
 ```
@@ -175,7 +177,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 python -m pyvibe demo/bad_async.py
 ```
 
-Expected: 11 CRITICAL findings, one per rule. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
+Expected: 13 CRITICAL findings, one per rule. `demo/bad_async.py` also contains a sync function with the same patterns — those produce zero findings.
 
 ---
 
@@ -187,7 +189,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-41 tests: true positives + false-positive guards for every rule.
+64 tests: true positives + false-positive guards for every rule.
 
 ---
 

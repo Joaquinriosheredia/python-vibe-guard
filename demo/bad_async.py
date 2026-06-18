@@ -1,7 +1,7 @@
 """
-demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-011).
+demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-013).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 11 CRITICAL findings.
+Expected: 13 CRITICAL findings.
 
 The sync_function() at the bottom uses the same calls in a sync context
 and should produce ZERO findings.
@@ -84,6 +84,17 @@ async def fetch_data():
 # This file is never executed — it is only parsed as AST by the scanner.
 async def run_script():
     os.system("python script.py")  # blocks until child process exits
+
+
+# PYVIBE-012 — asyncio.create_task() return value discarded → task GC'd silently
+async def notify_user(user_id: int):
+    asyncio.create_task(send_email(user_id))  # orphaned: Task ref lost immediately
+
+
+# PYVIBE-013 — asyncio.gather() without return_exceptions=True → first exception leaks tasks
+async def fetch_all(urls: list):
+    results = await asyncio.gather(*(fetch(u) for u in urls))  # missing return_exceptions=True
+    return results
 
 
 # ── Sync context — should produce ZERO findings ───────────────────────────────
