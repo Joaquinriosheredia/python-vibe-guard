@@ -1,10 +1,12 @@
 """
-demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-016).
+demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-018).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 16 CRITICAL findings.
+Expected: 18 findings (17 CRITICAL + 1 WARNING for PYVIBE-017 except Exception).
 
-The sync_function() at the bottom uses the same calls in a sync context
-and should produce ZERO findings.
+sync_function() at the bottom uses the same async-specific patterns in sync
+context and produces ZERO findings for those rules.
+Note: PYVIBE-017 fires in any context — sync_function() intentionally avoids
+empty except blocks to keep the 0-finding guarantee for async-specific rules.
 """
 import asyncio
 import time
@@ -114,6 +116,20 @@ async def fetch_sync_client(url: str):
     return client.get(url).json()
 
 
+# PYVIBE-017 — except Exception with empty body → silences errors (WARNING)
+async def process_order_silently():
+    try:
+        await do_work()
+    except Exception:
+        pass  # all errors silently swallowed — bugs become invisible
+
+
+# PYVIBE-018 — while True without await inside async def → CPU 100%, event loop blocked
+async def background_worker():
+    while True:
+        check_queue()  # no await — event loop never yields
+
+
 # ── Sync context — should produce ZERO findings ───────────────────────────────
 def sync_function():
     time.sleep(1)
@@ -125,4 +141,4 @@ def sync_function():
     sqlite3.connect(":memory:")
     open("demo/bad_async.py").close()
     httpx.get("https://example.com")
-    os.system("echo hello")
+    os.system("echo hello")  # intentional: mirrors the PYVIBE-011 anti-pattern in sync context; no injection risk (literal string)

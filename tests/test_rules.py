@@ -999,6 +999,202 @@ async def handler():
     assert any(v.rule_id == "PYVIBE-004" for v in violations)
 
 
+# ─── PYVIBE-017: silent except ───────────────────────────────────────────────
+
+def test_017_detects_bare_except_pass():
+    src = """
+def process():
+    try:
+        do_work()
+    except:
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+
+
+def test_017_detects_bare_except_ellipsis():
+    src = """
+async def handler():
+    try:
+        await do_work()
+    except:
+        ...
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+
+
+def test_017_detects_except_exception_pass():
+    src = """
+async def handler():
+    try:
+        await process_order()
+    except Exception:
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "WARNING"
+
+
+def test_017_detects_except_exception_ellipsis():
+    src = """
+def sync_worker():
+    try:
+        process()
+    except Exception:
+        ...
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "WARNING"
+
+
+def test_017_no_false_positive_with_logging():
+    src = """
+import logging
+
+async def handler():
+    try:
+        await process_order()
+    except Exception as e:
+        logging.error(e)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_no_false_positive_specific_exception():
+    src = """
+async def handler():
+    try:
+        await process()
+    except ValueError:
+        pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_no_false_positive_reraise():
+    src = """
+async def handler():
+    try:
+        await process()
+    except Exception:
+        raise
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_no_false_positive_specific_exception_with_pass():
+    # KeyError, IOError, etc. — specific types are acceptable patterns
+    src = """
+def handler():
+    try:
+        d["key"]
+    except KeyError:
+        pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+# ─── PYVIBE-018: while True without await ────────────────────────────────────
+
+def test_018_detects_while_true_no_await():
+    src = """
+async def worker():
+    while True:
+        do_something()
+"""
+    violations = analyze_source(src)
+    v018 = [v for v in violations if v.rule_id == "PYVIBE-018"]
+    assert len(v018) == 1
+    assert v018[0].severity == "CRITICAL"
+
+
+def test_018_no_false_positive_with_await_sleep():
+    src = """
+import asyncio
+
+async def worker():
+    while True:
+        do_something()
+        await asyncio.sleep(1)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_no_false_positive_with_any_await():
+    src = """
+async def worker():
+    while True:
+        result = await fetch()
+        process(result)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_no_false_positive_in_sync_function():
+    # while True in a plain def is fine — rule only applies to async def
+    src = """
+def worker():
+    while True:
+        do_something()
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_no_false_positive_await_in_nested_if():
+    # await inside an if inside the while counts
+    src = """
+async def worker():
+    while True:
+        if condition:
+            await asyncio.sleep(0)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_detects_await_only_in_nested_function():
+    # await is inside a nested async def — doesn't help the outer while True
+    src = """
+async def worker():
+    while True:
+        async def inner():
+            await asyncio.sleep(1)
+        inner()
+"""
+    violations = analyze_source(src)
+    v018 = [v for v in violations if v.rule_id == "PYVIBE-018"]
+    assert len(v018) == 1
+
+
+def test_018_no_false_positive_while_condition():
+    # while <non-True condition> is not flagged
+    src = """
+async def worker():
+    while queue:
+        item = queue.pop()
+        process(item)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

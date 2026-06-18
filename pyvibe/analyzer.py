@@ -19,6 +19,8 @@ from pyvibe.rules.gather_no_return_exceptions import GatherNoReturnExceptionsRul
 from pyvibe.rules.ensure_future_orphan import EnsureFutureOrphanRule
 from pyvibe.rules.loop_run_until_complete import LoopRunUntilCompleteRule
 from pyvibe.rules.httpx_client_sync import HttpxClientSyncRule
+from pyvibe.rules.silent_except import SilentExceptRule
+from pyvibe.rules.while_true_no_await import WhileTrueNoAwaitRule
 
 ALL_RULES = [
     AsyncSleepRule,
@@ -37,6 +39,8 @@ ALL_RULES = [
     EnsureFutureOrphanRule,
     LoopRunUntilCompleteRule,
     HttpxClientSyncRule,
+    SilentExceptRule,
+    WhileTrueNoAwaitRule,
 ]
 
 ALL_RULE_IDS: FrozenSet[str] = frozenset(r.RULE_ID for r in ALL_RULES)
