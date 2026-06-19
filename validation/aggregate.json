@@ -1,0 +1,669 @@
+{
+  "version": "0.5.0",
+  "scan_date": "2026-06-19",
+  "total_repos": 50,
+  "total_files": 31451,
+  "total_violations": 1556,
+  "by_rule": {
+    "PYVIBE-001": {
+      "total_hits": 40,
+      "repos_with_hits": 10,
+      "top_repos": [
+        {
+          "repo": "home-assistant/core",
+          "hits": 17
+        },
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 6
+        },
+        {
+          "repo": "learning-at-home/hivemind",
+          "hits": 5
+        },
+        {
+          "repo": "agronholm/anyio",
+          "hits": 4
+        },
+        {
+          "repo": "slackapi/python-slack-sdk",
+          "hits": 3
+        }
+      ]
+    },
+    "PYVIBE-002": {
+      "total_hits": 5,
+      "repos_with_hits": 3,
+      "top_repos": [
+        {
+          "repo": "home-assistant/core",
+          "hits": 2
+        },
+        {
+          "repo": "learning-at-home/hivemind",
+          "hits": 2
+        },
+        {
+          "repo": "bmoscon/cryptofeed",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-003": {
+      "total_hits": 1,
+      "repos_with_hits": 1,
+      "top_repos": [
+        {
+          "repo": "piccolo-orm/piccolo",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-004": {
+      "total_hits": 58,
+      "repos_with_hits": 4,
+      "top_repos": [
+        {
+          "repo": "agronholm/anyio",
+          "hits": 36
+        },
+        {
+          "repo": "BeanieODM/beanie",
+          "hits": 11
+        },
+        {
+          "repo": "home-assistant/core",
+          "hits": 8
+        },
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 3
+        }
+      ]
+    },
+    "PYVIBE-005": {
+      "total_hits": 93,
+      "repos_with_hits": 6,
+      "top_repos": [
+        {
+          "repo": "taskiq-python/taskiq",
+          "hits": 57
+        },
+        {
+          "repo": "faust-streaming/faust",
+          "hits": 23
+        },
+        {
+          "repo": "mher/flower",
+          "hits": 6
+        },
+        {
+          "repo": "fastapi-practices/fastapi-best-architecture",
+          "hits": 5
+        },
+        {
+          "repo": "cookiecutter/cookiecutter-django",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-006": {
+      "total_hits": 16,
+      "repos_with_hits": 8,
+      "top_repos": [
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 4
+        },
+        {
+          "repo": "home-assistant/core",
+          "hits": 3
+        },
+        {
+          "repo": "coleifer/peewee",
+          "hits": 2
+        },
+        {
+          "repo": "Kludex/uvicorn",
+          "hits": 2
+        },
+        {
+          "repo": "google-gemini/genai-processors",
+          "hits": 2
+        }
+      ]
+    },
+    "PYVIBE-007": {
+      "total_hits": 11,
+      "repos_with_hits": 3,
+      "top_repos": [
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 8
+        },
+        {
+          "repo": "tortoise/tortoise-orm",
+          "hits": 2
+        },
+        {
+          "repo": "XiaoYouChR/Ghost-Downloader-3",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-008": {
+      "total_hits": 115,
+      "repos_with_hits": 7,
+      "top_repos": [
+        {
+          "repo": "Kludex/uvicorn",
+          "hits": 45
+        },
+        {
+          "repo": "aiortc/aioquic",
+          "hits": 26
+        },
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 25
+        },
+        {
+          "repo": "home-assistant/core",
+          "hits": 13
+        },
+        {
+          "repo": "MagicStack/asyncpg",
+          "hits": 3
+        }
+      ]
+    },
+    "PYVIBE-009": {
+      "total_hits": 116,
+      "repos_with_hits": 19,
+      "top_repos": [
+        {
+          "repo": "Neoteroi/BlackSheep",
+          "hits": 32
+        },
+        {
+          "repo": "home-assistant/core",
+          "hits": 21
+        },
+        {
+          "repo": "Tinche/aiofiles",
+          "hits": 21
+        },
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 9
+        },
+        {
+          "repo": "XiaoYouChR/Ghost-Downloader-3",
+          "hits": 4
+        }
+      ]
+    },
+    "PYVIBE-010": {
+      "total_hits": 1,
+      "repos_with_hits": 1,
+      "top_repos": [
+        {
+          "repo": "aiortc/aioquic",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-011": {
+      "total_hits": 0,
+      "repos_with_hits": 0,
+      "top_repos": []
+    },
+    "PYVIBE-012": {
+      "total_hits": 35,
+      "repos_with_hits": 10,
+      "top_repos": [
+        {
+          "repo": "learning-at-home/hivemind",
+          "hits": 17
+        },
+        {
+          "repo": "nolar/kopf",
+          "hits": 8
+        },
+        {
+          "repo": "Kludex/uvicorn",
+          "hits": 2
+        },
+        {
+          "repo": "Neoteroi/BlackSheep",
+          "hits": 2
+        },
+        {
+          "repo": "MagicStack/asyncpg",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-013": {
+      "total_hits": 626,
+      "repos_with_hits": 31,
+      "top_repos": [
+        {
+          "repo": "home-assistant/core",
+          "hits": 331
+        },
+        {
+          "repo": "aiortc/aiortc",
+          "hits": 54
+        },
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 43
+        },
+        {
+          "repo": "learning-at-home/hivemind",
+          "hits": 34
+        },
+        {
+          "repo": "MagicStack/asyncpg",
+          "hits": 16
+        }
+      ]
+    },
+    "PYVIBE-014": {
+      "total_hits": 16,
+      "repos_with_hits": 8,
+      "top_repos": [
+        {
+          "repo": "faust-streaming/faust",
+          "hits": 5
+        },
+        {
+          "repo": "aiortc/aiortc",
+          "hits": 3
+        },
+        {
+          "repo": "pallets/quart",
+          "hits": 3
+        },
+        {
+          "repo": "home-assistant/core",
+          "hits": 1
+        },
+        {
+          "repo": "MagicStack/asyncpg",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-015": {
+      "total_hits": 1,
+      "repos_with_hits": 1,
+      "top_repos": [
+        {
+          "repo": "aio-libs/aiomysql",
+          "hits": 1
+        }
+      ]
+    },
+    "PYVIBE-016": {
+      "total_hits": 0,
+      "repos_with_hits": 0,
+      "top_repos": []
+    },
+    "PYVIBE-017": {
+      "total_hits": 393,
+      "repos_with_hits": 24,
+      "top_repos": [
+        {
+          "repo": "IBM/mcp-context-forge",
+          "hits": 238
+        },
+        {
+          "repo": "gevent/gevent",
+          "hits": 33
+        },
+        {
+          "repo": "rthalley/dnspython",
+          "hits": 26
+        },
+        {
+          "repo": "slackapi/python-slack-sdk",
+          "hits": 22
+        },
+        {
+          "repo": "tortoise/tortoise-orm",
+          "hits": 14
+        }
+      ]
+    },
+    "PYVIBE-018": {
+      "total_hits": 29,
+      "repos_with_hits": 6,
+      "top_repos": [
+        {
+          "repo": "home-assistant/core",
+          "hits": 21
+        },
+        {
+          "repo": "agronholm/anyio",
+          "hits": 3
+        },
+        {
+          "repo": "Tinche/aiofiles",
+          "hits": 2
+        },
+        {
+          "repo": "coleifer/peewee",
+          "hits": 1
+        },
+        {
+          "repo": "Neoteroi/BlackSheep",
+          "hits": 1
+        }
+      ]
+    }
+  },
+  "repos": [
+    {
+      "repo": "fastapi/fastapi",
+      "stars": 99408,
+      "files": 1121,
+      "violations": 5
+    },
+    {
+      "repo": "home-assistant/core",
+      "stars": 87834,
+      "files": 17702,
+      "violations": 418
+    },
+    {
+      "repo": "sanic-org/sanic",
+      "stars": 18624,
+      "files": 332,
+      "violations": 5
+    },
+    {
+      "repo": "cookiecutter/cookiecutter-django",
+      "stars": 13550,
+      "files": 72,
+      "violations": 1
+    },
+    {
+      "repo": "coleifer/peewee",
+      "stars": 11976,
+      "files": 87,
+      "violations": 28
+    },
+    {
+      "repo": "Kludex/uvicorn",
+      "stars": 10771,
+      "files": 79,
+      "violations": 53
+    },
+    {
+      "repo": "litestar-org/litestar",
+      "stars": 8296,
+      "files": 1131,
+      "violations": 4
+    },
+    {
+      "repo": "MagicStack/asyncpg",
+      "stars": 8047,
+      "files": 52,
+      "violations": 24
+    },
+    {
+      "repo": "mher/flower",
+      "stars": 7200,
+      "files": 52,
+      "violations": 6
+    },
+    {
+      "repo": "gevent/gevent",
+      "stars": 6440,
+      "files": 413,
+      "violations": 33
+    },
+    {
+      "repo": "hect0x7/JMComic-Crawler-Python",
+      "stars": 6304,
+      "files": 33,
+      "violations": 8
+    },
+    {
+      "repo": "fastapi-users/fastapi-users",
+      "stars": 6170,
+      "files": 88,
+      "violations": 0
+    },
+    {
+      "repo": "aiogram/aiogram",
+      "stars": 5766,
+      "files": 1040,
+      "violations": 6
+    },
+    {
+      "repo": "tortoise/tortoise-orm",
+      "stars": 5586,
+      "files": 448,
+      "violations": 32
+    },
+    {
+      "repo": "XiaoYouChR/Ghost-Downloader-3",
+      "stars": 5480,
+      "files": 101,
+      "violations": 10
+    },
+    {
+      "repo": "ag2ai/faststream",
+      "stars": 5240,
+      "files": 1851,
+      "violations": 1
+    },
+    {
+      "repo": "aiortc/aiortc",
+      "stars": 5065,
+      "files": 69,
+      "violations": 61
+    },
+    {
+      "repo": "ets-labs/python-dependency-injector",
+      "stars": 4882,
+      "files": 428,
+      "violations": 15
+    },
+    {
+      "repo": "strawberry-graphql/strawberry",
+      "stars": 4673,
+      "files": 672,
+      "violations": 14
+    },
+    {
+      "repo": "miguelgrinberg/python-socketio",
+      "stars": 4355,
+      "files": 102,
+      "violations": 8
+    },
+    {
+      "repo": "slackapi/python-slack-sdk",
+      "stars": 4008,
+      "files": 453,
+      "violations": 28
+    },
+    {
+      "repo": "IBM/mcp-context-forge",
+      "stars": 3929,
+      "files": 1436,
+      "violations": 337
+    },
+    {
+      "repo": "pallets/quart",
+      "stars": 3644,
+      "files": 72,
+      "violations": 5
+    },
+    {
+      "repo": "Tinche/aiofiles",
+      "stars": 3249,
+      "files": 19,
+      "violations": 24
+    },
+    {
+      "repo": "celery/kombu",
+      "stars": 3122,
+      "files": 185,
+      "violations": 5
+    },
+    {
+      "repo": "python-arq/arq",
+      "stars": 2960,
+      "files": 31,
+      "violations": 17
+    },
+    {
+      "repo": "bmoscon/cryptofeed",
+      "stars": 2859,
+      "files": 160,
+      "violations": 8
+    },
+    {
+      "repo": "s3rius/FastAPI-template",
+      "stars": 2803,
+      "files": 137,
+      "violations": 0
+    },
+    {
+      "repo": "smithyhq/sqladmin",
+      "stars": 2752,
+      "files": 55,
+      "violations": 0
+    },
+    {
+      "repo": "BeanieODM/beanie",
+      "stars": 2681,
+      "files": 195,
+      "violations": 21
+    },
+    {
+      "repo": "rthalley/dnspython",
+      "stars": 2665,
+      "files": 250,
+      "violations": 27
+    },
+    {
+      "repo": "nolar/kopf",
+      "stars": 2607,
+      "files": 306,
+      "violations": 10
+    },
+    {
+      "repo": "samuelcolvin/watchfiles",
+      "stars": 2506,
+      "files": 17,
+      "violations": 0
+    },
+    {
+      "repo": "agronholm/anyio",
+      "stars": 2484,
+      "files": 74,
+      "violations": 46
+    },
+    {
+      "repo": "learning-at-home/hivemind",
+      "stars": 2475,
+      "files": 145,
+      "violations": 61
+    },
+    {
+      "repo": "fastapi/asyncer",
+      "stars": 2451,
+      "files": 52,
+      "violations": 0
+    },
+    {
+      "repo": "hbldh/bleak",
+      "stars": 2436,
+      "files": 91,
+      "violations": 6
+    },
+    {
+      "repo": "Neoteroi/BlackSheep",
+      "stars": 2344,
+      "files": 188,
+      "violations": 45
+    },
+    {
+      "repo": "fastapi-practices/fastapi-best-architecture",
+      "stars": 2300,
+      "files": 298,
+      "violations": 8
+    },
+    {
+      "repo": "vintasoftware/django-react-boilerplate",
+      "stars": 2262,
+      "files": 33,
+      "violations": 0
+    },
+    {
+      "repo": "taskiq-python/taskiq",
+      "stars": 2200,
+      "files": 165,
+      "violations": 63
+    },
+    {
+      "repo": "Kludex/mangum",
+      "stars": 2124,
+      "files": 23,
+      "violations": 0
+    },
+    {
+      "repo": "google-gemini/genai-processors",
+      "stars": 2111,
+      "files": 121,
+      "violations": 9
+    },
+    {
+      "repo": "elliotgao2/gain",
+      "stars": 2018,
+      "files": 18,
+      "violations": 2
+    },
+    {
+      "repo": "aiortc/aioquic",
+      "stars": 1986,
+      "files": 61,
+      "violations": 31
+    },
+    {
+      "repo": "celery/django-celery-beat",
+      "stars": 1940,
+      "files": 53,
+      "violations": 1
+    },
+    {
+      "repo": "piccolo-orm/piccolo",
+      "stars": 1913,
+      "files": 387,
+      "violations": 13
+    },
+    {
+      "repo": "aio-libs/aiomysql",
+      "stars": 1888,
+      "files": 53,
+      "violations": 11
+    },
+    {
+      "repo": "yutto-dev/yutto",
+      "stars": 1888,
+      "files": 100,
+      "violations": 8
+    },
+    {
+      "repo": "faust-streaming/faust",
+      "stars": 1874,
+      "files": 400,
+      "violations": 38
+    }
+  ]
+}

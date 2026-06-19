@@ -1,12 +1,78 @@
 # python-vibe-guard — Validation Results
 
-**Scanner version:** 0.5.0 (18 rules, 104 tests)  
+**Scanner version:** 0.5.0 (18 rules, 108 tests)  
 **Scan date:** 2026-06-19  
 **Command:** `python -m pyvibe <repo> --json`
 
 ---
 
-## Reproducible scan — 4 repos
+## Massive scan — 50 repos
+
+Automated scan via `validation/run_massive_scan.py`. GitHub search queries: `topic:fastapi`, `topic:aiohttp`, `topic:asyncio`, `topic:celery` + in:description keywords, all `stars:>100 pushed:>2025-06-19`. Repos sorted by stars, deduplicated, reference set excluded.
+
+| Metric | Value |
+|--------|-------|
+| Repos scanned | 50 |
+| .py files | 31,451 |
+| Total violations | 1,556 |
+| Failed clones | 0 |
+| Failed scans | 0 |
+
+Machine-readable data: [`aggregate.json`](aggregate.json)
+
+### Rule prevalence across 50 repos
+
+| Rule | Total hits | Repos affected | % of repos |
+|------|-----------|----------------|-----------|
+| PYVIBE-013 | 626 | 31 | 62% |
+| PYVIBE-017 | 393 | 24 | 48% |
+| PYVIBE-009 | 116 | 19 | 38% |
+| PYVIBE-008 | 115 | 7 | 14% |
+| PYVIBE-005 | 93 | 6 | 12% |
+| PYVIBE-018 | 29 | 6 | 12% |
+| PYVIBE-004 | 58 | 4 | 8% |
+| PYVIBE-001 | 40 | 10 | 20% |
+| PYVIBE-012 | 35 | 10 | 20% |
+| PYVIBE-014 | 16 | 8 | 16% |
+| PYVIBE-006 | 16 | 8 | 16% |
+| PYVIBE-007 | 11 | 3 | 6% |
+| PYVIBE-002 | 5 | 3 | 6% |
+| PYVIBE-003 | 1 | 1 | 2% |
+| PYVIBE-010 | 1 | 1 | 2% |
+| PYVIBE-015 | 1 | 1 | 2% |
+| PYVIBE-011 | 0 | 0 | 0% |
+| PYVIBE-016 | 0 | 0 | 0% |
+
+### Top repos by violation count
+
+| Repo | Stars | .py files | Violations |
+|------|-------|-----------|-----------|
+| home-assistant/core | 87k | 17,702 | 418 |
+| IBM/mcp-context-forge | 3.9k | 1,436 | 337 |
+| taskiq-python/taskiq | 2.2k | 165 | 63 |
+| aiortc/aiortc | 5k | 69 | 61 |
+| learning-at-home/hivemind | 2.5k | 145 | 61 |
+| Kludex/uvicorn | 10.8k | 79 | 53 |
+| agronholm/anyio | 2.5k | 74 | 46 |
+| Neoteroi/BlackSheep | 2.3k | 188 | 45 |
+| faust-streaming/faust | 1.9k | 400 | 38 |
+| gevent/gevent | 6.4k | 413 | 33 |
+
+### Key findings from the 50-repo sweep
+
+**PYVIBE-013 is the most prevalent pattern (62% of repos).** `asyncio.gather()` without `return_exceptions=True` appears in 31 of 50 real codebases. Home Assistant alone has 331 instances; aiortc has 54; MCP Context Forge has 43. This confirms it's the single most common async mistake in production Python.
+
+**PYVIBE-009 (`open()` in async def) affects 38% of repos.** 116 hits across 19 repos. Synchronous file I/O in async contexts is endemic — not just in examples, but in production code paths.
+
+**PYVIBE-008 (`sqlite3.connect()` in async def) has 115 hits across 7 repos.** Despite aiosqlite and databases being available, direct sqlite3 usage inside async handlers is common in ORM codebases.
+
+**PYVIBE-018 (`while True` no await) — 29 confirmed real hits.** After fixing the async generator false positive, the remaining 29 hits across 6 repos are genuine blocking event loops. Home Assistant has 21; anyio has 3 (in compatibility shim code).
+
+**PYVIBE-017 (`except Exception: pass`) in 48% of repos.** 393 hits makes it the second most common pattern. Most are WARNING-severity (`except Exception`); bare `except:` (CRITICAL) is rarer.
+
+---
+
+## Reproducible scan — 4 repos (reference set)
 
 These results are fully reproducible from the cloned repos in `validation/repos/`.
 

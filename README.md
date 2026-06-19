@@ -52,7 +52,32 @@ Rules PYVIBE-001–004, 006–016, 018 fire **only inside `async def`**. PYVIBE-
 
 ## Validation
 
-Scanned against 4 production Python repos with pyvibe v0.5.0 (18 rules, `python -m pyvibe <repo> --json`):
+### 50-repo sweep (automated, v0.5.0)
+
+Automated scan of 50 GitHub repos (`stars:>100`, updated last year, async Python keywords). Script: [`validation/run_massive_scan.py`](validation/run_massive_scan.py).
+
+| Metric | Value |
+|--------|-------|
+| Repos scanned | 50 |
+| .py files | 31,451 |
+| Total violations | 1,556 |
+
+**Rule prevalence (top 8):**
+
+| Rule | Hits | Repos affected | % of repos |
+|------|------|----------------|-----------|
+| PYVIBE-013 `gather()` no return_exceptions | 626 | 31 | **62%** |
+| PYVIBE-017 `except Exception: pass` | 393 | 24 | **48%** |
+| PYVIBE-009 `open()` in async def | 116 | 19 | **38%** |
+| PYVIBE-008 `sqlite3` in async def | 115 | 7 | 14% |
+| PYVIBE-005 `@task` no time_limit | 93 | 6 | 12% |
+| PYVIBE-018 `while True` no await | 29 | 6 | 12% |
+| PYVIBE-001 `time.sleep` in async | 40 | 10 | 20% |
+| PYVIBE-012 orphaned `create_task()` | 35 | 10 | 20% |
+
+Full data: [`validation/aggregate.json`](validation/aggregate.json) · [`validation/massive-results.md`](validation/massive-results.md)
+
+### Reference scan — 4 repos (reproducible)
 
 | Repo | .py files | Violations |
 |------|-----------|-----------|
@@ -62,34 +87,14 @@ Scanned against 4 production Python repos with pyvibe v0.5.0 (18 rules, `python 
 | [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
 | **Total** | **1 761** | **397** |
 
-**By rule (rules with 0 hits omitted):**
+Raw data: [`validation/breakdown.json`](validation/breakdown.json)
 
-| Rule | Hits | fastapi | celery | aiohttp |
-|------|------|---------|--------|---------|
-| PYVIBE-001 | 1 | 0 | 0 | 1 |
-| PYVIBE-005 | 352 | 0 | 352 | 0 |
-| PYVIBE-006 | 2 | 0 | 0 | 2 |
-| PYVIBE-009 | 4 | 0 | 0 | 4 |
-| PYVIBE-013 | 20 | 0 | 0 | 20 |
-| PYVIBE-017 | 18 | 5 | 11 | 2 |
-| PYVIBE-018 | 0 | 0 | 0 | 0 |
+**Notable findings:**
 
-Rules PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits. PYVIBE-014/015/016 target application code patterns, not framework internals.
-
-Raw scan data: [`validation/breakdown.json`](validation/breakdown.json) · Full analysis: [`validation/massive-results.md`](validation/massive-results.md)
-
-**Real findings:**
-
-- **Celery `celery/app/builtins.py`** — 352 internal tasks without `soft_time_limit` or `time_limit`. Workers can hang indefinitely if the broker/backend stops responding. Detected by PYVIBE-005.
-
-- **aiohttp `examples/web_ws.py`** — `open()` inside an async WebSocket handler in the official examples. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
-
-- **aiohttp** — 20 `asyncio.gather()` calls without `return_exceptions=True`. Auto-downgraded to WARNING in test files; CRITICAL in production handlers. Detected by PYVIBE-013.
-
-**False positives detected in this scan (PYVIBE-017/018, new rules):**
-
-- PYVIBE-018: async generators (`while True: yield`) are now correctly excluded — `yield` is a valid event-loop checkpoint in async generators. Zero hits across all 4 repos.
-- PYVIBE-017: 5 hits in FastAPI test functions that intentionally swallow exceptions via a middleware capture pattern — severity already WARNING; test-file downgrade being considered. See [`validation/massive-results.md`](validation/massive-results.md#false-positives-observed-v050).
+- **home-assistant/core** — 418 violations across 17,702 files; 331 PYVIBE-013, 21 PYVIBE-018.
+- **Celery** — 352 tasks without `time_limit`; workers can hang indefinitely on broker timeouts.
+- **aiortc, anyio, uvicorn** — `while True` loops without `await` in production async I/O code (PYVIBE-018, 29 confirmed real hits after async-generator FP fix).
+- **aiohttp examples** — `open()` in async WebSocket handlers; synchronous I/O in production-facing code.
 
 ---
 
