@@ -12,11 +12,11 @@ These results are fully reproducible from the cloned repos in `validation/repos/
 
 | Repo | .py files | Violations |
 |------|-----------|-----------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 7 |
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 5 |
 | [celery/celery](https://github.com/celery/celery) | 416 | 363 |
 | [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 29 |
 | [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
-| **Total** | **1 761** | **399** |
+| **Total** | **1 761** | **397** |
 
 Machine-readable breakdown: [`breakdown.json`](breakdown.json)
 
@@ -41,7 +41,7 @@ Machine-readable breakdown: [`breakdown.json`](breakdown.json)
 | PYVIBE-015 | 0 | — | — | — | — | Targets application code, not framework internals |
 | PYVIBE-016 | 0 | — | — | — | — | Targets application code, not framework internals |
 | PYVIBE-017 | 18 | 5 | 11 | 2 | 0 | `except Exception: pass`; see FP analysis below |
-| PYVIBE-018 | 2 | 2 | 0 | 0 | 0 | `while True` no await; see FP analysis below |
+| PYVIBE-018 | 0 | 0 | 0 | 0 | 0 | FP fixed: async generators now excluded |
 
 ---
 
@@ -81,22 +81,21 @@ async def websocket_handler(request):
 
 ## False positives observed (v0.5.0)
 
-### PYVIBE-018 — async generator false positive (2 hits, fastapi)
+### PYVIBE-018 — async generator false positive (FIXED)
 
-**Confirmed false positive.** PYVIBE-018 fires on `while True: yield` inside async generator functions (`async def` bodies that contain `yield`). These are NOT blocked loops: each `yield` suspends the generator and the caller's `await __anext__()` is a real event loop checkpoint.
+**Previously a false positive; fixed in this release.** PYVIBE-018 was firing on `while True: yield` inside async generator functions. These are NOT blocked loops: each `yield` suspends the generator and the caller's `await __anext__()` is a real event loop checkpoint.
 
 ```python
-# fastapi/tests/test_stream_cancellation.py:28
+# fastapi/tests/test_stream_cancellation.py:28  ← was a FP, now correctly excluded
 @app.get("/stream-raw", response_class=StreamingResponse)
 async def stream_raw() -> AsyncIterable[str]:
-    """Async generator with no internal await - would hang without checkpoint."""
     i = 0
     while True:
-        yield f"item {i}\n"   # ← yield IS a suspension point; not a blocking loop
+        yield f"item {i}\n"   # yield IS a suspension point in async generators
         i += 1
 ```
 
-**Root cause:** PYVIBE-018's AST walker does not distinguish between async generators (have `yield`) and regular `async def` functions. Fix: skip `while True` blocks when the enclosing `async def` contains a `yield` expression — making it an async generator.
+**Fix applied:** `_has_yield_in_body()` helper detects `ast.Yield`/`ast.YieldFrom` in the function body (not crossing nested function scopes). If the enclosing `async def` contains a `yield`, it is treated as an async generator and excluded from PYVIBE-018. FastAPI now shows 0 PYVIBE-018 hits.
 
 ### PYVIBE-017 — except Exception: pass in test code (FastAPI: 5 hits, mixed)
 

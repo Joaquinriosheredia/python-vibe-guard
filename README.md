@@ -56,11 +56,11 @@ Scanned against 4 production Python repos with pyvibe v0.5.0 (18 rules, `python 
 
 | Repo | .py files | Violations |
 |------|-----------|-----------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 7 |
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 5 |
 | [celery/celery](https://github.com/celery/celery) | 416 | 363 |
 | [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 29 |
 | [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
-| **Total** | **1 761** | **399** |
+| **Total** | **1 761** | **397** |
 
 **By rule (rules with 0 hits omitted):**
 
@@ -72,7 +72,7 @@ Scanned against 4 production Python repos with pyvibe v0.5.0 (18 rules, `python 
 | PYVIBE-009 | 4 | 0 | 0 | 4 |
 | PYVIBE-013 | 20 | 0 | 0 | 20 |
 | PYVIBE-017 | 18 | 5 | 11 | 2 |
-| PYVIBE-018 | 2 | 2 | 0 | 0 |
+| PYVIBE-018 | 0 | 0 | 0 | 0 |
 
 Rules PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits. PYVIBE-014/015/016 target application code patterns, not framework internals.
 
@@ -88,8 +88,8 @@ Raw scan data: [`validation/breakdown.json`](validation/breakdown.json) · Full 
 
 **False positives detected in this scan (PYVIBE-017/018, new rules):**
 
-- PYVIBE-018 fires on `while True: yield` in FastAPI async generators — `yield` IS a suspension point in async generators; fix pending. See [`validation/massive-results.md`](validation/massive-results.md#false-positives-observed-v050).
-- PYVIBE-017 fires in FastAPI test functions that intentionally swallow exceptions via a middleware capture pattern — severity already WARNING; test-file downgrade being considered.
+- PYVIBE-018: async generators (`while True: yield`) are now correctly excluded — `yield` is a valid event-loop checkpoint in async generators. Zero hits across all 4 repos.
+- PYVIBE-017: 5 hits in FastAPI test functions that intentionally swallow exceptions via a middleware capture pattern — severity already WARNING; test-file downgrade being considered. See [`validation/massive-results.md`](validation/massive-results.md#false-positives-observed-v050).
 
 ---
 
@@ -224,7 +224,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-104 tests: true positives + false-positive guards for every rule.
+108 tests: true positives + false-positive guards for every rule.
 
 ---
 

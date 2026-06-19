@@ -1195,6 +1195,58 @@ async def worker():
     assert not any(v.rule_id == "PYVIBE-018" for v in violations)
 
 
+def test_018_no_false_positive_async_generator_yield():
+    # async generator — yield IS a suspension point (caller awaits __anext__)
+    src = """
+from typing import AsyncIterable
+
+async def stream_items() -> AsyncIterable[str]:
+    i = 0
+    while True:
+        yield f"item {i}"
+        i += 1
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_no_false_positive_async_generator_yield_from():
+    # async generator using yield from — same reasoning
+    src = """
+async def relay(source):
+    while True:
+        yield from source
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-018" for v in violations)
+
+
+def test_018_detects_regular_async_func_while_true_no_await():
+    # plain async def (no yield) with while True and no await — must still fire
+    src = """
+async def worker():
+    while True:
+        do_something()
+"""
+    violations = analyze_source(src)
+    v018 = [v for v in violations if v.rule_id == "PYVIBE-018"]
+    assert len(v018) == 1
+
+
+def test_018_nested_yield_does_not_affect_outer_func():
+    # yield is inside a nested function — outer async def is NOT an async gen
+    src = """
+async def outer():
+    while True:
+        def inner():
+            yield 1
+        do_something()
+"""
+    violations = analyze_source(src)
+    v018 = [v for v in violations if v.rule_id == "PYVIBE-018"]
+    assert len(v018) == 1
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

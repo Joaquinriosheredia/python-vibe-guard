@@ -1,14 +1,13 @@
 {
   "version": "0.5.0",
   "rules": 18,
-  "tests": 104,
+  "tests": 108,
   "repos": {
     "fastapi": {
-      "total": 7,
-      "files_hit": 2,
+      "total": 5,
+      "files_hit": 1,
       "by_rule": {
-        "PYVIBE-017": 5,
-        "PYVIBE-018": 2
+        "PYVIBE-017": 5
       }
     },
     "celery": {
@@ -36,7 +35,7 @@
       "by_rule": {}
     }
   },
-  "grand_total": 399,
+  "grand_total": 397,
   "rule_totals": {
     "PYVIBE-001": 1,
     "PYVIBE-002": 0,
@@ -55,6 +54,6 @@
     "PYVIBE-015": 0,
     "PYVIBE-016": 0,
     "PYVIBE-017": 18,
-    "PYVIBE-018": 2
+    "PYVIBE-018": 0
   }
 }
