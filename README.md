@@ -52,37 +52,44 @@ Rules PYVIBE-001–004, 006–016, 018 fire **only inside `async def`**. PYVIBE-
 
 ## Validation
 
-Scanned against 4 production Python repos with pyvibe v0.4.0 (16 rules, shallow clone, `python -m pyvibe <repo> --json`). PYVIBE-017 and PYVIBE-018 were added in v0.5.0:
+Scanned against 4 production Python repos with pyvibe v0.5.0 (18 rules, `python -m pyvibe <repo> --json`):
 
 | Repo | .py files | Violations |
 |------|-----------|-----------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 0 |
-| [celery/celery](https://github.com/celery/celery) | 416 | 352 |
-| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 27 |
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 7 |
+| [celery/celery](https://github.com/celery/celery) | 416 | 363 |
+| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 29 |
 | [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
-| **Total** | **1 761** | **379** |
+| **Total** | **1 761** | **399** |
 
 **By rule (rules with 0 hits omitted):**
 
-| Rule | Hits | Repo |
-|------|------|------|
-| PYVIBE-001 | 1 | aiohttp |
-| PYVIBE-005 | 352 | celery |
-| PYVIBE-006 | 2 | aiohttp |
-| PYVIBE-009 | 4 | aiohttp |
-| PYVIBE-013 | 20 | aiohttp |
+| Rule | Hits | fastapi | celery | aiohttp |
+|------|------|---------|--------|---------|
+| PYVIBE-001 | 1 | 0 | 0 | 1 |
+| PYVIBE-005 | 352 | 0 | 352 | 0 |
+| PYVIBE-006 | 2 | 0 | 0 | 2 |
+| PYVIBE-009 | 4 | 0 | 0 | 4 |
+| PYVIBE-013 | 20 | 0 | 0 | 20 |
+| PYVIBE-017 | 18 | 5 | 11 | 2 |
+| PYVIBE-018 | 2 | 2 | 0 | 0 |
 
-Rules PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits across these four repos. PYVIBE-014/015/016 target application code patterns (orphaned futures, `run_until_complete` inside async, sync httpx client), not framework internals — these repos are the frameworks themselves.
+Rules PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits. PYVIBE-014/015/016 target application code patterns, not framework internals.
 
-Raw scan data: [`validation/breakdown.json`](validation/breakdown.json)
+Raw scan data: [`validation/breakdown.json`](validation/breakdown.json) · Full analysis: [`validation/massive-results.md`](validation/massive-results.md)
 
 **Real findings:**
 
-- **Celery `celery/app/builtins.py`** — 12 internal tasks (`backend_cleanup`, `accumulate`, `unlock_chord`, and others) defined without `soft_time_limit` or `time_limit`. Under certain broker/backend conditions these workers can hang indefinitely. Detected by PYVIBE-005.
+- **Celery `celery/app/builtins.py`** — 352 internal tasks without `soft_time_limit` or `time_limit`. Workers can hang indefinitely if the broker/backend stops responding. Detected by PYVIBE-005.
 
-- **aiohttp `examples/web_ws.py`** — `open()` called inside an async WebSocket handler in the official aiohttp examples directory. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
+- **aiohttp `examples/web_ws.py`** — `open()` inside an async WebSocket handler in the official examples. Synchronous file I/O in a production-facing async context. Detected by PYVIBE-009.
 
-- **aiohttp** — 20 `asyncio.gather()` calls without `return_exceptions=True`. In test files these are downgraded to WARNING automatically; in production async handlers they remain CRITICAL. Detected by PYVIBE-013.
+- **aiohttp** — 20 `asyncio.gather()` calls without `return_exceptions=True`. Auto-downgraded to WARNING in test files; CRITICAL in production handlers. Detected by PYVIBE-013.
+
+**False positives detected in this scan (PYVIBE-017/018, new rules):**
+
+- PYVIBE-018 fires on `while True: yield` in FastAPI async generators — `yield` IS a suspension point in async generators; fix pending. See [`validation/massive-results.md`](validation/massive-results.md#false-positives-observed-v050).
+- PYVIBE-017 fires in FastAPI test functions that intentionally swallow exceptions via a middleware capture pattern — severity already WARNING; test-file downgrade being considered.
 
 ---
 

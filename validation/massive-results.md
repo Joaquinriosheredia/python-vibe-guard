@@ -1,7 +1,7 @@
 # python-vibe-guard — Validation Results
 
-**Scanner version:** 0.4.0 (16 rules, 76 tests)  
-**Scan date:** 2026-06-18  
+**Scanner version:** 0.5.0 (18 rules, 104 tests)  
+**Scan date:** 2026-06-19  
 **Command:** `python -m pyvibe <repo> --json`
 
 ---
@@ -12,36 +12,36 @@ These results are fully reproducible from the cloned repos in `validation/repos/
 
 | Repo | .py files | Violations |
 |------|-----------|-----------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 0 |
-| [celery/celery](https://github.com/celery/celery) | 416 | 352 |
-| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 27 |
+| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 7 |
+| [celery/celery](https://github.com/celery/celery) | 416 | 363 |
+| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 29 |
 | [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
-| **Total** | **1 761** | **379** |
+| **Total** | **1 761** | **399** |
 
 Machine-readable breakdown: [`breakdown.json`](breakdown.json)
 
 ### By rule
 
-| Rule | Hits | Repo | Notes |
-|------|------|------|-------|
-| PYVIBE-001 | 1 | aiohttp | `time.sleep` in async test helper |
-| PYVIBE-002 | 0 | — | |
-| PYVIBE-003 | 0 | — | |
-| PYVIBE-004 | 0 | — | |
-| PYVIBE-005 | 352 | celery | Internal tasks without `soft_time_limit` / `time_limit` |
-| PYVIBE-006 | 2 | aiohttp | `ContextVar.set()` without cleanup |
-| PYVIBE-007 | 0 | — | |
-| PYVIBE-008 | 0 | — | |
-| PYVIBE-009 | 4 | aiohttp | `open()` in async handlers in `examples/` |
-| PYVIBE-010 | 0 | — | |
-| PYVIBE-011 | 0 | — | |
-| PYVIBE-012 | 0 | — | |
-| PYVIBE-013 | 20 | aiohttp | `gather()` without `return_exceptions=True`; auto-downgraded to WARNING in test files |
-| PYVIBE-014 | 0 | — | Targets application code, not framework internals |
-| PYVIBE-015 | 0 | — | Targets application code, not framework internals |
-| PYVIBE-016 | 0 | — | Targets application code, not framework internals |
-
-**Note on PYVIBE-014/015/016:** These rules detect patterns that appear in *application* code (orphaned `ensure_future`, `loop.run_until_complete()` inside async, sync `httpx.Client()` in async handlers). The four repos scanned are the framework libraries themselves — they do not exhibit these patterns by design. The rules fire correctly against application-layer code as shown in `demo/bad_async.py`.
+| Rule | Total | fastapi | celery | aiohttp | httpx | Notes |
+|------|-------|---------|--------|---------|-------|-------|
+| PYVIBE-001 | 1 | 0 | 0 | 1 | 0 | `time.sleep` in async test helper |
+| PYVIBE-002 | 0 | — | — | — | — | |
+| PYVIBE-003 | 0 | — | — | — | — | |
+| PYVIBE-004 | 0 | — | — | — | — | |
+| PYVIBE-005 | 352 | 0 | 352 | 0 | 0 | Internal tasks without `soft_time_limit` / `time_limit` |
+| PYVIBE-006 | 2 | 0 | 0 | 2 | 0 | `ContextVar.set()` without cleanup |
+| PYVIBE-007 | 0 | — | — | — | — | |
+| PYVIBE-008 | 0 | — | — | — | — | |
+| PYVIBE-009 | 4 | 0 | 0 | 4 | 0 | `open()` in async handlers in `examples/` |
+| PYVIBE-010 | 0 | — | — | — | — | |
+| PYVIBE-011 | 0 | — | — | — | — | |
+| PYVIBE-012 | 0 | — | — | — | — | |
+| PYVIBE-013 | 20 | 0 | 0 | 20 | 0 | `gather()` without `return_exceptions`; WARNING in test files |
+| PYVIBE-014 | 0 | — | — | — | — | Targets application code, not framework internals |
+| PYVIBE-015 | 0 | — | — | — | — | Targets application code, not framework internals |
+| PYVIBE-016 | 0 | — | — | — | — | Targets application code, not framework internals |
+| PYVIBE-017 | 18 | 5 | 11 | 2 | 0 | `except Exception: pass`; see FP analysis below |
+| PYVIBE-018 | 2 | 2 | 0 | 0 | 0 | `while True` no await; see FP analysis below |
 
 ---
 
@@ -79,10 +79,46 @@ async def websocket_handler(request):
 
 ---
 
-## False positives observed
+## False positives observed (v0.5.0)
 
-| Rule | Count | Cause |
-|------|-------|-------|
-| PYVIBE-013 | ~60–70% of hits industry-wide | Test code intentionally lets exceptions propagate; mitigated by automatic WARNING downgrade in test files |
+### PYVIBE-018 — async generator false positive (2 hits, fastapi)
 
-No other false positives were observed in this scan.
+**Confirmed false positive.** PYVIBE-018 fires on `while True: yield` inside async generator functions (`async def` bodies that contain `yield`). These are NOT blocked loops: each `yield` suspends the generator and the caller's `await __anext__()` is a real event loop checkpoint.
+
+```python
+# fastapi/tests/test_stream_cancellation.py:28
+@app.get("/stream-raw", response_class=StreamingResponse)
+async def stream_raw() -> AsyncIterable[str]:
+    """Async generator with no internal await - would hang without checkpoint."""
+    i = 0
+    while True:
+        yield f"item {i}\n"   # ← yield IS a suspension point; not a blocking loop
+        i += 1
+```
+
+**Root cause:** PYVIBE-018's AST walker does not distinguish between async generators (have `yield`) and regular `async def` functions. Fix: skip `while True` blocks when the enclosing `async def` contains a `yield` expression — making it an async generator.
+
+### PYVIBE-017 — except Exception: pass in test code (FastAPI: 5 hits, mixed)
+
+**Partial false positive.** FastAPI's test suite uses `except Exception: pass` deliberately — it captures exceptions via middleware and ignores the client-side raise:
+
+```python
+# fastapi/tests/test_validation_error_context.py:91
+def test_request_validation_error_includes_endpoint_context():
+    captured_exception.exception = None
+    try:
+        client.get("/users/invalid")
+    except Exception:
+        pass    # ← intentional; exception captured in middleware, not here
+    assert captured_exception.exception is not None
+```
+
+The other PYVIBE-017 hits in celery and aiohttp are genuine anti-patterns (e.g., swallowing `os.sysconf` errors silently). Severity is WARNING (not CRITICAL) for `except Exception` vs CRITICAL for bare `except:`.
+
+**Mitigation available:** Extend `_is_test_file()` logic to downgrade PYVIBE-017 from WARNING to INFO in test files, consistent with PYVIBE-013 treatment. Not yet implemented.
+
+---
+
+## Rules with zero hits across all 4 repos
+
+PYVIBE-002–004, 007–008, 010–012, 014–016 produced zero hits. PYVIBE-014/015/016 target application code patterns (orphaned futures, `run_until_complete` inside async, sync httpx client) — these repos are the frameworks themselves and don't exhibit these patterns. PYVIBE-002–004, 007–008, 010–012 fire on patterns that these mature libraries have already eliminated from their codebases.

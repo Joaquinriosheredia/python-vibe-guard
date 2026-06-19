@@ -7,3 +7,5 @@ build/
 venv/
 .pytest_cache/
 *.egg
+validation/repos/
+validation/*_raw.json
