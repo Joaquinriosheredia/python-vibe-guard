@@ -8,4 +8,5 @@ venv/
 .pytest_cache/
 *.egg
 validation/repos/
+validation/raw/
 validation/*_raw.json
