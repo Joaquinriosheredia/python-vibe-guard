@@ -164,7 +164,7 @@ def count_py_files(repo_path: Path) -> int:
 
 # ── Aggregation ────────────────────────────────────────────────────────────────
 
-ALL_RULES = [f"PYVIBE-{str(i).zfill(3)}" for i in range(1, 19)]
+ALL_RULES = [f"PYVIBE-{str(i).zfill(3)}" for i in range(1, 20)]
 
 
 def build_aggregate(scan_results: list[dict]) -> dict:
@@ -223,16 +223,33 @@ def main() -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Discover repos ──────────────────────────────────────────────────────
+    # Phase 1: always load existing clones
+    existing_dirs = [d for d in sorted(REPOS_DIR.iterdir()) if d.is_dir()]
+    existing_names = {d.name.replace("__", "/"): d for d in existing_dirs}
+    log(f"[1/4] Found {len(existing_names)} existing clones in {REPOS_DIR}")
+
     if args.skip_clone:
-        # Use whatever is already in REPOS_DIR (excludes reference repos)
-        repo_dirs = [d for d in sorted(REPOS_DIR.iterdir()) if d.is_dir()]
-        repos_to_scan = [{"full_name": d.name.replace("__", "/"), "stargazers_count": 0}
-                         for d in repo_dirs]
-        log(f"[skip-clone] found {len(repos_to_scan)} existing clones in {REPOS_DIR}")
+        # Scan only what's already cloned — no GitHub search, no new downloads
+        repos_to_scan = [{"full_name": name, "stargazers_count": 0}
+                         for name in sorted(existing_names)]
+        log(f"      [skip-clone] using {len(repos_to_scan)} existing repos only")
     else:
-        log(f"[1/4] Searching GitHub for up to {args.target} async Python repos...")
-        repos_to_scan = collect_repos(args.target)
-        log(f"      → {len(repos_to_scan)} repos selected\n")
+        # Phase 2: search GitHub for additional repos to reach target
+        needed = args.target - len(existing_names)
+        if needed > 0:
+            log(f"      need {needed} more — searching GitHub...")
+            candidates = collect_repos(args.target * 3)
+            new_repos = [r for r in candidates if r["full_name"] not in existing_names][:needed]
+            log(f"      → {len(new_repos)} new repos selected")
+        else:
+            new_repos = []
+            log(f"      already have {len(existing_names)} repos — no search needed")
+
+        repos_to_scan = (
+            [{"full_name": n, "stargazers_count": 0} for n in sorted(existing_names)]
+            + new_repos
+        )
+        log(f"      → {len(repos_to_scan)} total repos to scan\n")
 
     # ── 2. Clone + scan ────────────────────────────────────────────────────────
     log(f"[2/4] Cloning and scanning {len(repos_to_scan)} repos...")

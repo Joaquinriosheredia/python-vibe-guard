@@ -70,28 +70,30 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 
 ## Validation
 
-### 50-repo sweep (automated, v0.5.0)
+### 100-repo sweep (automated, v0.6.0)
 
-Automated scan of 50 GitHub repos (`stars:>100`, updated last year, async Python keywords). Script: [`validation/run_massive_scan.py`](validation/run_massive_scan.py).
+Automated scan of 100 GitHub repos (`stars:>100`, updated last year, async Python keywords). Script: [`validation/run_massive_scan.py`](validation/run_massive_scan.py).
 
 | Metric | Value |
 |--------|-------|
-| Repos scanned | 50 |
-| .py files | 31,451 |
-| Total violations | 1,556 |
+| Repos scanned | 100 |
+| .py files | 64,335 |
+| Total violations | 3,639 |
 
-**Rule prevalence (top 8):**
+**Rule prevalence (top 10):**
 
 | Rule | Hits | Repos affected | % of repos |
 |------|------|----------------|-----------|
-| PYVIBE-013 `gather()` no return_exceptions | 626 | 31 | **62%** |
-| PYVIBE-017 `except Exception: pass` | 393 | 24 | **48%** |
-| PYVIBE-009 `open()` in async def | 116 | 19 | **38%** |
-| PYVIBE-008 `sqlite3` in async def | 115 | 7 | 14% |
-| PYVIBE-005 `@task` no time_limit | 93 | 6 | 12% |
-| PYVIBE-018 `while True` no await | 29 | 6 | 12% |
-| PYVIBE-001 `time.sleep` in async | 40 | 10 | 20% |
-| PYVIBE-012 orphaned `create_task()` | 35 | 10 | 20% |
+| PYVIBE-017 `except Exception: pass` | 999 | 57 | **57%** |
+| PYVIBE-013 `gather()` no return_exceptions | 766 | 47 | **47%** |
+| PYVIBE-019 retry loop no backoff | 408 | 43 | **43%** |
+| PYVIBE-009 `open()` in async def | 178 | 33 | **33%** |
+| PYVIBE-005 `@task` no time_limit | 882 | 15 | 15% |
+| PYVIBE-001 `time.sleep` in async | 55 | 16 | 16% |
+| PYVIBE-012 orphaned `create_task()` | 58 | 13 | 13% |
+| PYVIBE-008 `sqlite3` in async def | 121 | 10 | 10% |
+| PYVIBE-018 `while True` no await | 36 | 10 | 10% |
+| PYVIBE-006 ContextVar no reset | 19 | 10 | 10% |
 
 Full data: [`validation/aggregate.json`](validation/aggregate.json) · [`validation/massive-results.md`](validation/massive-results.md)
 
