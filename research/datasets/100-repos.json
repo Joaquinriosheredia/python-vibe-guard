@@ -1,0 +1,29 @@
+{
+  "version": "0.6.0",
+  "scan_date": "2026-06-20",
+  "total_repos": 100,
+  "total_files": 64335,
+  "total_violations": 3639,
+  "by_rule": {
+    "PYVIBE-001": { "total_hits": 55,  "repos_with_hits": 16, "top_repos": [{"repo":"home-assistant/core","hits":17},{"repo":"MODSetter/SurfSense","hits":7},{"repo":"IBM/mcp-context-forge","hits":6},{"repo":"learning-at-home/hivemind","hits":5},{"repo":"agronholm/anyio","hits":4}] },
+    "PYVIBE-002": { "total_hits": 5,   "repos_with_hits": 3,  "top_repos": [{"repo":"home-assistant/core","hits":2},{"repo":"learning-at-home/hivemind","hits":2},{"repo":"bmoscon/cryptofeed","hits":1}] },
+    "PYVIBE-003": { "total_hits": 1,   "repos_with_hits": 1,  "top_repos": [{"repo":"piccolo-orm/piccolo","hits":1}] },
+    "PYVIBE-004": { "total_hits": 60,  "repos_with_hits": 5,  "top_repos": [{"repo":"agronholm/anyio","hits":36},{"repo":"BeanieODM/beanie","hits":11},{"repo":"home-assistant/core","hits":8},{"repo":"IBM/mcp-context-forge","hits":3},{"repo":"polarsource/polar","hits":2}] },
+    "PYVIBE-005": { "total_hits": 882, "repos_with_hits": 15, "top_repos": [{"repo":"celery","hits":352},{"repo":"coleifer/huey","hits":172},{"repo":"WeblateOrg/weblate","hits":79},{"repo":"taskiq-python/taskiq","hits":57},{"repo":"jumpserver/jumpserver","hits":52}] },
+    "PYVIBE-006": { "total_hits": 19,  "repos_with_hits": 10, "top_repos": [{"repo":"IBM/mcp-context-forge","hits":4},{"repo":"home-assistant/core","hits":3},{"repo":"Kludex/uvicorn","hits":2},{"repo":"aiohttp","hits":2},{"repo":"coleifer/peewee","hits":2}] },
+    "PYVIBE-007": { "total_hits": 16,  "repos_with_hits": 6,  "top_repos": [{"repo":"IBM/mcp-context-forge","hits":8},{"repo":"tortoise/tortoise-orm","hits":2},{"repo":"chopratejas/headroom","hits":2},{"repo":"plastic-labs/honcho","hits":2},{"repo":"XiaoYouChR/Ghost-Downloader-3","hits":1}] },
+    "PYVIBE-008": { "total_hits": 121, "repos_with_hits": 10, "top_repos": [{"repo":"Kludex/uvicorn","hits":45},{"repo":"aiortc/aioquic","hits":26},{"repo":"IBM/mcp-context-forge","hits":25},{"repo":"home-assistant/core","hits":13},{"repo":"MagicStack/asyncpg","hits":3}] },
+    "PYVIBE-009": { "total_hits": 178, "repos_with_hits": 33, "top_repos": [{"repo":"Neoteroi/BlackSheep","hits":32},{"repo":"Tinche/aiofiles","hits":21},{"repo":"home-assistant/core","hits":21},{"repo":"MODSetter/SurfSense","hits":20},{"repo":"IBM/mcp-context-forge","hits":9}] },
+    "PYVIBE-010": { "total_hits": 17,  "repos_with_hits": 2,  "top_repos": [{"repo":"hunvreus/devpush","hits":16},{"repo":"aiortc/aioquic","hits":1}] },
+    "PYVIBE-011": { "total_hits": 0,   "repos_with_hits": 0,  "top_repos": [] },
+    "PYVIBE-012": { "total_hits": 58,  "repos_with_hits": 13, "top_repos": [{"repo":"learning-at-home/hivemind","hits":17},{"repo":"chenyme/grok2api","hits":16},{"repo":"nolar/kopf","hits":8},{"repo":"zhinianboke/xianyu-auto-reply","hits":5},{"repo":"Kludex/uvicorn","hits":2}] },
+    "PYVIBE-013": { "total_hits": 766, "repos_with_hits": 47, "top_repos": [{"repo":"home-assistant/core","hits":331},{"repo":"aiortc/aiortc","hits":54},{"repo":"IBM/mcp-context-forge","hits":43},{"repo":"MODSetter/SurfSense","hits":38},{"repo":"learning-at-home/hivemind","hits":34}] },
+    "PYVIBE-014": { "total_hits": 16,  "repos_with_hits": 8,  "top_repos": [{"repo":"faust-streaming/faust","hits":5},{"repo":"aiortc/aiortc","hits":3},{"repo":"pallets/quart","hits":3},{"repo":"MagicStack/asyncpg","hits":1},{"repo":"aiogram/aiogram","hits":1}] },
+    "PYVIBE-015": { "total_hits": 1,   "repos_with_hits": 1,  "top_repos": [{"repo":"aio-libs/aiomysql","hits":1}] },
+    "PYVIBE-016": { "total_hits": 1,   "repos_with_hits": 1,  "top_repos": [{"repo":"plastic-labs/honcho","hits":1}] },
+    "PYVIBE-017": { "total_hits": 999, "repos_with_hits": 57, "top_repos": [{"repo":"IBM/mcp-context-forge","hits":238},{"repo":"zhinianboke/xianyu-auto-reply","hits":104},{"repo":"chopratejas/headroom","hits":64},{"repo":"MODSetter/SurfSense","hits":63},{"repo":"getsentry/sentry","hits":62}] },
+    "PYVIBE-018": { "total_hits": 36,  "repos_with_hits": 10, "top_repos": [{"repo":"home-assistant/core","hits":21},{"repo":"agronholm/anyio","hits":3},{"repo":"Tinche/aiofiles","hits":2},{"repo":"MODSetter/SurfSense","hits":2},{"repo":"plastic-labs/honcho","hits":2}] },
+    "PYVIBE-019": { "total_hits": 408, "repos_with_hits": 43, "top_repos": [{"repo":"zhinianboke/xianyu-auto-reply","hits":75},{"repo":"home-assistant/core","hits":73},{"repo":"MODSetter/SurfSense","hits":60},{"repo":"IBM/mcp-context-forge","hits":53},{"repo":"polarsource/polar","hits":19}] },
+    "PYVIBE-020": { "note": "Rule added in v0.7.0 after this scan was archived — no data for 100-repo campaign.", "total_hits": null, "repos_with_hits": null, "top_repos": [] }
+  }
+}
