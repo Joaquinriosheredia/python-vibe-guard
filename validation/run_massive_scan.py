@@ -164,7 +164,7 @@ def count_py_files(repo_path: Path) -> int:
 
 # ── Aggregation ────────────────────────────────────────────────────────────────
 
-ALL_RULES = [f"PYVIBE-{str(i).zfill(3)}" for i in range(1, 20)]
+ALL_RULES = [f"PYVIBE-{str(i).zfill(3)}" for i in range(1, 21)]
 
 
 def build_aggregate(scan_results: list[dict]) -> dict:
@@ -198,7 +198,7 @@ def build_aggregate(scan_results: list[dict]) -> dict:
     ]
 
     return {
-        "version": "0.6.0",
+        "version": "0.7.0",
         "scan_date": date.today().isoformat(),
         "total_repos": len(scan_results),
         "total_files": total_files,

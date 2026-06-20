@@ -1,17 +1,21 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "scan_date": "2026-06-20",
-  "total_repos": 100,
-  "total_files": 64335,
-  "total_violations": 3639,
+  "total_repos": 250,
+  "total_files": 95678,
+  "total_violations": 7106,
   "by_rule": {
     "PYVIBE-001": {
-      "total_hits": 55,
-      "repos_with_hits": 16,
+      "total_hits": 87,
+      "repos_with_hits": 31,
       "top_repos": [
         {
           "repo": "home-assistant/core",
           "hits": 17
+        },
+        {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 9
         },
         {
           "repo": "MODSetter/SurfSense",
@@ -24,17 +28,17 @@
         {
           "repo": "learning-at-home/hivemind",
           "hits": 5
-        },
-        {
-          "repo": "agronholm/anyio",
-          "hits": 4
         }
       ]
     },
     "PYVIBE-002": {
-      "total_hits": 5,
-      "repos_with_hits": 3,
+      "total_hits": 14,
+      "repos_with_hits": 10,
       "top_repos": [
+        {
+          "repo": "paulpierre/RasaGPT",
+          "hits": 3
+        },
         {
           "repo": "home-assistant/core",
           "hits": 2
@@ -45,6 +49,10 @@
         },
         {
           "repo": "bmoscon/cryptofeed",
+          "hits": 1
+        },
+        {
+          "repo": "pydantic/logfire",
           "hits": 1
         }
       ]
@@ -86,8 +94,8 @@
       ]
     },
     "PYVIBE-005": {
-      "total_hits": 882,
-      "repos_with_hits": 15,
+      "total_hits": 1072,
+      "repos_with_hits": 32,
       "top_repos": [
         {
           "repo": "celery",
@@ -112,8 +120,8 @@
       ]
     },
     "PYVIBE-006": {
-      "total_hits": 19,
-      "repos_with_hits": 10,
+      "total_hits": 28,
+      "repos_with_hits": 15,
       "top_repos": [
         {
           "repo": "IBM/mcp-context-forge",
@@ -124,30 +132,34 @@
           "hits": 3
         },
         {
+          "repo": "sumerc/yappi",
+          "hits": 3
+        },
+        {
           "repo": "Kludex/uvicorn",
           "hits": 2
         },
         {
           "repo": "aiohttp",
           "hits": 2
-        },
-        {
-          "repo": "coleifer/peewee",
-          "hits": 2
         }
       ]
     },
     "PYVIBE-007": {
-      "total_hits": 16,
-      "repos_with_hits": 6,
+      "total_hits": 61,
+      "repos_with_hits": 12,
       "top_repos": [
+        {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 31
+        },
         {
           "repo": "IBM/mcp-context-forge",
           "hits": 8
         },
         {
-          "repo": "tortoise/tortoise-orm",
-          "hits": 2
+          "repo": "nats-io/nats.py",
+          "hits": 8
         },
         {
           "repo": "chopratejas/headroom",
@@ -156,17 +168,21 @@
         {
           "repo": "plastic-labs/honcho",
           "hits": 2
-        },
-        {
-          "repo": "XiaoYouChR/Ghost-Downloader-3",
-          "hits": 1
         }
       ]
     },
     "PYVIBE-008": {
-      "total_hits": 121,
-      "repos_with_hits": 10,
+      "total_hits": 436,
+      "repos_with_hits": 22,
       "top_repos": [
+        {
+          "repo": "nats-io/nats.py",
+          "hits": 128
+        },
+        {
+          "repo": "aio-libs/aiopg",
+          "hits": 122
+        },
         {
           "repo": "Kludex/uvicorn",
           "hits": 45
@@ -178,40 +194,32 @@
         {
           "repo": "IBM/mcp-context-forge",
           "hits": 25
-        },
-        {
-          "repo": "home-assistant/core",
-          "hits": 13
-        },
-        {
-          "repo": "MagicStack/asyncpg",
-          "hits": 3
         }
       ]
     },
     "PYVIBE-009": {
-      "total_hits": 178,
-      "repos_with_hits": 33,
+      "total_hits": 443,
+      "repos_with_hits": 60,
       "top_repos": [
+        {
+          "repo": "ronf/asyncssh",
+          "hits": 94
+        },
+        {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 50
+        },
         {
           "repo": "Neoteroi/BlackSheep",
           "hits": 32
         },
         {
+          "repo": "nats-io/nats.py",
+          "hits": 23
+        },
+        {
           "repo": "Tinche/aiofiles",
           "hits": 21
-        },
-        {
-          "repo": "home-assistant/core",
-          "hits": 21
-        },
-        {
-          "repo": "MODSetter/SurfSense",
-          "hits": 20
-        },
-        {
-          "repo": "IBM/mcp-context-forge",
-          "hits": 9
         }
       ]
     },
@@ -235,8 +243,8 @@
       "top_repos": []
     },
     "PYVIBE-012": {
-      "total_hits": 58,
-      "repos_with_hits": 13,
+      "total_hits": 135,
+      "repos_with_hits": 30,
       "top_repos": [
         {
           "repo": "learning-at-home/hivemind",
@@ -247,22 +255,22 @@
           "hits": 16
         },
         {
-          "repo": "nolar/kopf",
-          "hits": 8
+          "repo": "Amm1rr/WebAI-to-API",
+          "hits": 16
         },
         {
-          "repo": "zhinianboke/xianyu-auto-reply",
-          "hits": 5
+          "repo": "fim-ai/fim-one",
+          "hits": 14
         },
         {
-          "repo": "Kludex/uvicorn",
-          "hits": 2
+          "repo": "nats-io/nats.py",
+          "hits": 11
         }
       ]
     },
     "PYVIBE-013": {
-      "total_hits": 766,
-      "repos_with_hits": 47,
+      "total_hits": 1095,
+      "repos_with_hits": 88,
       "top_repos": [
         {
           "repo": "home-assistant/core",
@@ -273,120 +281,140 @@
           "hits": 54
         },
         {
+          "repo": "TracecatHQ/tracecat",
+          "hits": 51
+        },
+        {
           "repo": "IBM/mcp-context-forge",
           "hits": 43
         },
         {
           "repo": "MODSetter/SurfSense",
           "hits": 38
-        },
-        {
-          "repo": "learning-at-home/hivemind",
-          "hits": 34
         }
       ]
     },
     "PYVIBE-014": {
-      "total_hits": 16,
-      "repos_with_hits": 8,
+      "total_hits": 33,
+      "repos_with_hits": 14,
       "top_repos": [
         {
           "repo": "faust-streaming/faust",
           "hits": 5
         },
         {
+          "repo": "Kav-K/GPTDiscord",
+          "hits": 4
+        },
+        {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 4
+        },
+        {
+          "repo": "postlund/pyatv",
+          "hits": 4
+        },
+        {
           "repo": "aiortc/aiortc",
           "hits": 3
-        },
-        {
-          "repo": "pallets/quart",
-          "hits": 3
-        },
-        {
-          "repo": "MagicStack/asyncpg",
-          "hits": 1
-        },
-        {
-          "repo": "aiogram/aiogram",
-          "hits": 1
         }
       ]
     },
     "PYVIBE-015": {
-      "total_hits": 1,
-      "repos_with_hits": 1,
+      "total_hits": 8,
+      "repos_with_hits": 5,
       "top_repos": [
         {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 4
+        },
+        {
           "repo": "aio-libs/aiomysql",
+          "hits": 1
+        },
+        {
+          "repo": "mongodb/motor",
+          "hits": 1
+        },
+        {
+          "repo": "ormar-orm/ormar",
+          "hits": 1
+        },
+        {
+          "repo": "omnilib/aiosqlite",
           "hits": 1
         }
       ]
     },
     "PYVIBE-016": {
-      "total_hits": 1,
-      "repos_with_hits": 1,
+      "total_hits": 2,
+      "repos_with_hits": 2,
       "top_repos": [
         {
           "repo": "plastic-labs/honcho",
+          "hits": 1
+        },
+        {
+          "repo": "pydantic/logfire",
           "hits": 1
         }
       ]
     },
     "PYVIBE-017": {
-      "total_hits": 999,
-      "repos_with_hits": 57,
+      "total_hits": 2510,
+      "repos_with_hits": 122,
       "top_repos": [
+        {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 352
+        },
         {
           "repo": "IBM/mcp-context-forge",
           "hits": 238
         },
         {
+          "repo": "BetaStreetOmnis/xhs_ai_publisher",
+          "hits": 193
+        },
+        {
+          "repo": "lxf746/any-auto-register",
+          "hits": 192
+        },
+        {
           "repo": "zhinianboke/xianyu-auto-reply",
           "hits": 104
-        },
-        {
-          "repo": "chopratejas/headroom",
-          "hits": 64
-        },
-        {
-          "repo": "MODSetter/SurfSense",
-          "hits": 63
-        },
-        {
-          "repo": "getsentry/sentry",
-          "hits": 62
         }
       ]
     },
     "PYVIBE-018": {
-      "total_hits": 36,
-      "repos_with_hits": 10,
+      "total_hits": 49,
+      "repos_with_hits": 17,
       "top_repos": [
         {
           "repo": "home-assistant/core",
           "hits": 21
         },
         {
-          "repo": "agronholm/anyio",
-          "hits": 3
+          "repo": "pmh1314520/WebRPA",
+          "hits": 5
         },
         {
-          "repo": "Tinche/aiofiles",
-          "hits": 2
+          "repo": "agronholm/anyio",
+          "hits": 3
         },
         {
           "repo": "MODSetter/SurfSense",
           "hits": 2
         },
         {
-          "repo": "plastic-labs/honcho",
+          "repo": "Tinche/aiofiles",
           "hits": 2
         }
       ]
     },
     "PYVIBE-019": {
-      "total_hits": 408,
-      "repos_with_hits": 43,
+      "total_hits": 760,
+      "repos_with_hits": 82,
       "top_repos": [
         {
           "repo": "zhinianboke/xianyu-auto-reply",
@@ -397,16 +425,42 @@
           "hits": 73
         },
         {
+          "repo": "pmh1314520/WebRPA",
+          "hits": 65
+        },
+        {
           "repo": "MODSetter/SurfSense",
           "hits": 60
         },
         {
           "repo": "IBM/mcp-context-forge",
           "hits": 53
+        }
+      ]
+    },
+    "PYVIBE-020": {
+      "total_hits": 295,
+      "repos_with_hits": 41,
+      "top_repos": [
+        {
+          "repo": "google-gemini/genai-processors",
+          "hits": 56
         },
         {
-          "repo": "polarsource/polar",
+          "repo": "home-assistant/core",
+          "hits": 55
+        },
+        {
+          "repo": "gevent/gevent",
+          "hits": 23
+        },
+        {
+          "repo": "Kludex/uvicorn",
           "hits": 19
+        },
+        {
+          "repo": "litestar-org/litestar",
+          "hits": 16
         }
       ]
     }
@@ -419,28 +473,58 @@
       "violations": 21
     },
     {
+      "repo": "Evil0ctal/Douyin_TikTok_Download_API",
+      "stars": 0,
+      "files": 43,
+      "violations": 10
+    },
+    {
       "repo": "IBM/mcp-context-forge",
       "stars": 0,
       "files": 1436,
-      "violations": 390
+      "violations": 395
+    },
+    {
+      "repo": "JoeanAmier/XHS-Downloader",
+      "stars": 0,
+      "files": 46,
+      "violations": 6
+    },
+    {
+      "repo": "JoshuaC215/agent-service-toolkit",
+      "stars": 0,
+      "files": 70,
+      "violations": 1
     },
     {
       "repo": "Kludex/mangum",
       "stars": 0,
       "files": 23,
-      "violations": 0
+      "violations": 1
     },
     {
       "repo": "Kludex/uvicorn",
       "stars": 0,
       "files": 79,
-      "violations": 53
+      "violations": 72
+    },
+    {
+      "repo": "LibrePhotos/librephotos",
+      "stars": 0,
+      "files": 439,
+      "violations": 9
+    },
+    {
+      "repo": "MODSetter/SurfSense",
+      "stars": 0,
+      "files": 1825,
+      "violations": 233
     },
     {
       "repo": "MagicStack/asyncpg",
       "stars": 0,
       "files": 52,
-      "violations": 25
+      "violations": 38
     },
     {
       "repo": "Neoteroi/BlackSheep",
@@ -455,22 +539,40 @@
       "violations": 24
     },
     {
+      "repo": "WeblateOrg/weblate",
+      "stars": 0,
+      "files": 932,
+      "violations": 81
+    },
+    {
       "repo": "XiaoYouChR/Ghost-Downloader-3",
       "stars": 0,
       "files": 101,
       "violations": 11
     },
     {
+      "repo": "Zeyi-Lin/HivisionIDPhotos",
+      "stars": 0,
+      "files": 38,
+      "violations": 0
+    },
+    {
+      "repo": "adamchainz/django-cors-headers",
+      "stars": 0,
+      "files": 15,
+      "violations": 0
+    },
+    {
       "repo": "ag2ai/faststream",
       "stars": 0,
       "files": 1851,
-      "violations": 3
+      "violations": 4
     },
     {
       "repo": "agronholm/anyio",
       "stars": 0,
       "files": 74,
-      "violations": 47
+      "violations": 49
     },
     {
       "repo": "aio-libs/aiomysql",
@@ -494,13 +596,31 @@
       "repo": "aiortc/aioquic",
       "stars": 0,
       "files": 61,
-      "violations": 31
+      "violations": 42
     },
     {
       "repo": "aiortc/aiortc",
       "stars": 0,
       "files": 69,
-      "violations": 61
+      "violations": 62
+    },
+    {
+      "repo": "amidaware/tacticalrmm",
+      "stars": 0,
+      "files": 644,
+      "violations": 53
+    },
+    {
+      "repo": "ansible/awx",
+      "stars": 0,
+      "files": 1042,
+      "violations": 12
+    },
+    {
+      "repo": "authlib/authlib",
+      "stars": 0,
+      "files": 329,
+      "violations": 1
     },
     {
       "repo": "bmoscon/cryptofeed",
@@ -524,13 +644,31 @@
       "repo": "celery/kombu",
       "stars": 0,
       "files": 185,
-      "violations": 5
+      "violations": 12
+    },
+    {
+      "repo": "chenyme/grok2api",
+      "stars": 0,
+      "files": 142,
+      "violations": 41
+    },
+    {
+      "repo": "chopratejas/headroom",
+      "stars": 0,
+      "files": 895,
+      "violations": 110
+    },
+    {
+      "repo": "coleifer/huey",
+      "stars": 0,
+      "files": 65,
+      "violations": 174
     },
     {
       "repo": "coleifer/peewee",
       "stars": 0,
       "files": 87,
-      "violations": 29
+      "violations": 30
     },
     {
       "repo": "cookiecutter/cookiecutter-django",
@@ -539,10 +677,34 @@
       "violations": 1
     },
     {
+      "repo": "django-cms/django-cms",
+      "stars": 0,
+      "files": 459,
+      "violations": 2
+    },
+    {
+      "repo": "django-oscar/django-oscar",
+      "stars": 0,
+      "files": 823,
+      "violations": 0
+    },
+    {
+      "repo": "django/django",
+      "stars": 0,
+      "files": 2922,
+      "violations": 13
+    },
+    {
       "repo": "elliotgao2/gain",
       "stars": 0,
       "files": 18,
-      "violations": 3
+      "violations": 5
+    },
+    {
+      "repo": "encode/django-rest-framework",
+      "stars": 0,
+      "files": 154,
+      "violations": 1
     },
     {
       "repo": "ets-labs/python-dependency-injector",
@@ -581,28 +743,52 @@
       "violations": 6
     },
     {
+      "repo": "fastapi/sqlmodel",
+      "stars": 0,
+      "files": 317,
+      "violations": 0
+    },
+    {
       "repo": "faust-streaming/faust",
       "stars": 0,
       "files": 400,
-      "violations": 44
+      "violations": 52
+    },
+    {
+      "repo": "getsentry/sentry",
+      "stars": 0,
+      "files": 8098,
+      "violations": 62
     },
     {
       "repo": "gevent/gevent",
       "stars": 0,
       "files": 413,
-      "violations": 33
+      "violations": 56
     },
     {
       "repo": "google-gemini/genai-processors",
       "stars": 0,
       "files": 121,
-      "violations": 9
+      "violations": 65
+    },
+    {
+      "repo": "graphql-python/graphene-django",
+      "stars": 0,
+      "files": 163,
+      "violations": 1
     },
     {
       "repo": "hbldh/bleak",
       "stars": 0,
       "files": 91,
-      "violations": 8
+      "violations": 15
+    },
+    {
+      "repo": "healthchecks/healthchecks",
+      "stars": 0,
+      "files": 651,
+      "violations": 0
     },
     {
       "repo": "hect0x7/JMComic-Crawler-Python",
@@ -614,7 +800,7 @@
       "repo": "home-assistant/core",
       "stars": 0,
       "files": 17702,
-      "violations": 491
+      "violations": 546
     },
     {
       "repo": "httpx",
@@ -623,16 +809,46 @@
       "violations": 1
     },
     {
+      "repo": "hunvreus/devpush",
+      "stars": 0,
+      "files": 53,
+      "violations": 32
+    },
+    {
+      "repo": "inventree/InvenTree",
+      "stars": 0,
+      "files": 1013,
+      "violations": 61
+    },
+    {
+      "repo": "joerick/pyinstrument",
+      "stars": 0,
+      "files": 91,
+      "violations": 3
+    },
+    {
+      "repo": "jumpserver/jumpserver",
+      "stars": 0,
+      "files": 1318,
+      "violations": 100
+    },
+    {
       "repo": "learning-at-home/hivemind",
       "stars": 0,
       "files": 145,
-      "violations": 67
+      "violations": 70
+    },
+    {
+      "repo": "liangliangyy/DjangoBlog",
+      "stars": 0,
+      "files": 162,
+      "violations": 7
     },
     {
       "repo": "litestar-org/litestar",
       "stars": 0,
       "files": 1131,
-      "violations": 7
+      "violations": 23
     },
     {
       "repo": "mher/flower",
@@ -647,16 +863,46 @@
       "violations": 14
     },
     {
+      "repo": "mouredev/Hello-Python",
+      "stars": 0,
+      "files": 36,
+      "violations": 0
+    },
+    {
+      "repo": "netbox-community/netbox",
+      "stars": 0,
+      "files": 1179,
+      "violations": 6
+    },
+    {
       "repo": "nolar/kopf",
       "stars": 0,
       "files": 306,
-      "violations": 16
+      "violations": 24
+    },
+    {
+      "repo": "nonebot/nonebot2",
+      "stars": 0,
+      "files": 118,
+      "violations": 2
     },
     {
       "repo": "pallets/quart",
       "stars": 0,
       "files": 72,
-      "violations": 7
+      "violations": 10
+    },
+    {
+      "repo": "paperless-ngx/paperless-ngx",
+      "stars": 0,
+      "files": 300,
+      "violations": 25
+    },
+    {
+      "repo": "pennersr/django-allauth",
+      "stars": 0,
+      "files": 1280,
+      "violations": 0
     },
     {
       "repo": "piccolo-orm/piccolo",
@@ -665,16 +911,46 @@
       "violations": 13
     },
     {
+      "repo": "plastic-labs/honcho",
+      "stars": 0,
+      "files": 398,
+      "violations": 42
+    },
+    {
+      "repo": "polarsource/polar",
+      "stars": 0,
+      "files": 1470,
+      "violations": 54
+    },
+    {
+      "repo": "pycaret/pycaret",
+      "stars": 0,
+      "files": 270,
+      "violations": 64
+    },
+    {
+      "repo": "pydantic/FastUI",
+      "stars": 0,
+      "files": 37,
+      "violations": 1
+    },
+    {
       "repo": "python-arq/arq",
       "stars": 0,
       "files": 31,
       "violations": 18
     },
     {
+      "repo": "remsky/Kokoro-FastAPI",
+      "stars": 0,
+      "files": 115,
+      "violations": 16
+    },
+    {
       "repo": "rthalley/dnspython",
       "stars": 0,
       "files": 250,
-      "violations": 38
+      "violations": 42
     },
     {
       "repo": "s3rius/FastAPI-template",
@@ -698,7 +974,7 @@
       "repo": "slackapi/python-slack-sdk",
       "stars": 0,
       "files": 453,
-      "violations": 29
+      "violations": 31
     },
     {
       "repo": "smithyhq/sqladmin",
@@ -710,7 +986,19 @@
       "repo": "strawberry-graphql/strawberry",
       "stars": 0,
       "files": 672,
-      "violations": 14
+      "violations": 22
+    },
+    {
+      "repo": "suitenumerique/docs",
+      "stars": 0,
+      "files": 199,
+      "violations": 4
+    },
+    {
+      "repo": "tadata-org/fastapi_mcp",
+      "stars": 0,
+      "files": 44,
+      "violations": 5
     },
     {
       "repo": "taskiq-python/taskiq",
@@ -725,10 +1013,46 @@
       "violations": 33
     },
     {
+      "repo": "vastsa/FileCodeBox",
+      "stars": 0,
+      "files": 36,
+      "violations": 13
+    },
+    {
       "repo": "vintasoftware/django-react-boilerplate",
       "stars": 0,
       "files": 33,
       "violations": 0
+    },
+    {
+      "repo": "vitalik/django-ninja",
+      "stars": 0,
+      "files": 182,
+      "violations": 0
+    },
+    {
+      "repo": "wagtail/wagtail",
+      "stars": 0,
+      "files": 1251,
+      "violations": 0
+    },
+    {
+      "repo": "wger-project/wger",
+      "stars": 0,
+      "files": 696,
+      "violations": 18
+    },
+    {
+      "repo": "wsvincent/awesome-django",
+      "stars": 0,
+      "files": 1,
+      "violations": 0
+    },
+    {
+      "repo": "xerrors/Yuxi",
+      "stars": 0,
+      "files": 320,
+      "violations": 38
     },
     {
       "repo": "yutto-dev/yutto",
@@ -737,280 +1061,910 @@
       "violations": 14
     },
     {
-      "repo": "django/django",
-      "stars": 87916,
-      "files": 2922,
-      "violations": 13
-    },
-    {
-      "repo": "getsentry/sentry",
-      "stars": 44136,
-      "files": 8098,
-      "violations": 62
-    },
-    {
-      "repo": "paperless-ngx/paperless-ngx",
-      "stars": 42261,
-      "files": 300,
-      "violations": 25
-    },
-    {
-      "repo": "chopratejas/headroom",
-      "stars": 39301,
-      "files": 895,
-      "violations": 110
-    },
-    {
-      "repo": "mouredev/Hello-Python",
-      "stars": 36088,
-      "files": 36,
-      "violations": 0
-    },
-    {
-      "repo": "jumpserver/jumpserver",
-      "stars": 30605,
-      "files": 1318,
-      "violations": 100
-    },
-    {
-      "repo": "encode/django-rest-framework",
-      "stars": 30077,
-      "files": 154,
-      "violations": 1
-    },
-    {
-      "repo": "Zeyi-Lin/HivisionIDPhotos",
-      "stars": 21198,
-      "files": 38,
-      "violations": 0
-    },
-    {
-      "repo": "netbox-community/netbox",
-      "stars": 20894,
-      "files": 1179,
-      "violations": 6
-    },
-    {
-      "repo": "wagtail/wagtail",
-      "stars": 20365,
-      "files": 1251,
-      "violations": 0
-    },
-    {
-      "repo": "Evil0ctal/Douyin_TikTok_Download_API",
-      "stars": 18438,
-      "files": 43,
-      "violations": 10
-    },
-    {
-      "repo": "fastapi/sqlmodel",
-      "stars": 18121,
-      "files": 317,
-      "violations": 0
-    },
-    {
-      "repo": "suitenumerique/docs",
-      "stars": 16600,
-      "files": 199,
-      "violations": 4
-    },
-    {
-      "repo": "ansible/awx",
-      "stars": 15459,
-      "files": 1042,
-      "violations": 12
-    },
-    {
-      "repo": "MODSetter/SurfSense",
-      "stars": 15024,
-      "files": 1825,
-      "violations": 233
-    },
-    {
-      "repo": "tadata-org/fastapi_mcp",
-      "stars": 11919,
-      "files": 44,
-      "violations": 5
-    },
-    {
-      "repo": "JoeanAmier/XHS-Downloader",
-      "stars": 11618,
-      "files": 46,
-      "violations": 6
-    },
-    {
-      "repo": "wsvincent/awesome-django",
-      "stars": 11141,
-      "files": 1,
-      "violations": 0
-    },
-    {
-      "repo": "django-cms/django-cms",
-      "stars": 10649,
-      "files": 459,
-      "violations": 2
-    },
-    {
-      "repo": "pennersr/django-allauth",
-      "stars": 10344,
-      "files": 1280,
-      "violations": 0
-    },
-    {
-      "repo": "healthchecks/healthchecks",
-      "stars": 10105,
-      "files": 651,
-      "violations": 0
-    },
-    {
-      "repo": "polarsource/polar",
-      "stars": 9962,
-      "files": 1470,
-      "violations": 54
-    },
-    {
-      "repo": "pycaret/pycaret",
-      "stars": 9811,
-      "files": 270,
-      "violations": 64
-    },
-    {
-      "repo": "vitalik/django-ninja",
-      "stars": 9100,
-      "files": 182,
-      "violations": 0
-    },
-    {
-      "repo": "pydantic/FastUI",
-      "stars": 8970,
-      "files": 37,
-      "violations": 1
-    },
-    {
-      "repo": "vastsa/FileCodeBox",
-      "stars": 8345,
-      "files": 36,
-      "violations": 13
-    },
-    {
-      "repo": "LibrePhotos/librephotos",
-      "stars": 8001,
-      "files": 439,
-      "violations": 9
-    },
-    {
-      "repo": "joerick/pyinstrument",
-      "stars": 7939,
-      "files": 91,
-      "violations": 3
-    },
-    {
-      "repo": "nonebot/nonebot2",
-      "stars": 7579,
-      "files": 118,
-      "violations": 2
-    },
-    {
-      "repo": "liangliangyy/DjangoBlog",
-      "stars": 7398,
-      "files": 162,
-      "violations": 7
-    },
-    {
-      "repo": "inventree/InvenTree",
-      "stars": 7159,
-      "files": 1013,
-      "violations": 61
-    },
-    {
-      "repo": "django-oscar/django-oscar",
-      "stars": 6613,
-      "files": 823,
-      "violations": 0
-    },
-    {
-      "repo": "wger-project/wger",
-      "stars": 6260,
-      "files": 696,
-      "violations": 18
-    },
-    {
-      "repo": "coleifer/huey",
-      "stars": 5978,
-      "files": 65,
-      "violations": 174
-    },
-    {
-      "repo": "WeblateOrg/weblate",
-      "stars": 5939,
-      "files": 932,
-      "violations": 81
-    },
-    {
-      "repo": "xerrors/Yuxi",
-      "stars": 5644,
-      "files": 320,
-      "violations": 36
-    },
-    {
-      "repo": "adamchainz/django-cors-headers",
-      "stars": 5587,
-      "files": 15,
-      "violations": 0
-    },
-    {
-      "repo": "authlib/authlib",
-      "stars": 5349,
-      "files": 329,
-      "violations": 1
-    },
-    {
-      "repo": "plastic-labs/honcho",
-      "stars": 5301,
-      "files": 398,
-      "violations": 42
-    },
-    {
-      "repo": "chenyme/grok2api",
-      "stars": 5246,
-      "files": 142,
-      "violations": 41
-    },
-    {
       "repo": "zhinianboke/xianyu-auto-reply",
-      "stars": 5139,
+      "stars": 0,
       "files": 442,
       "violations": 189
     },
     {
-      "repo": "remsky/Kokoro-FastAPI",
-      "stars": 5047,
+      "repo": "pydantic/logfire",
+      "stars": 4311,
+      "files": 253,
+      "violations": 28
+    },
+    {
+      "repo": "dynaconf/dynaconf",
+      "stars": 4307,
+      "files": 479,
+      "violations": 15
+    },
+    {
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stars": 3942,
+      "files": 2312,
+      "violations": 2
+    },
+    {
+      "repo": "Lightning-AI/LitServe",
+      "stars": 3896,
+      "files": 99,
+      "violations": 17
+    },
+    {
+      "repo": "FactoryBoy/factory_boy",
+      "stars": 3799,
+      "files": 61,
+      "violations": 0
+    },
+    {
+      "repo": "newpanjing/simpleui",
+      "stars": 3799,
+      "files": 7,
+      "violations": 3
+    },
+    {
+      "repo": "zappa/Zappa",
+      "stars": 3691,
+      "files": 55,
+      "violations": 14
+    },
+    {
+      "repo": "TracecatHQ/tracecat",
+      "stars": 3686,
+      "files": 1413,
+      "violations": 112
+    },
+    {
+      "repo": "geex-arts/django-jet",
+      "stars": 3626,
+      "files": 57,
+      "violations": 2
+    },
+    {
+      "repo": "axnsan12/drf-yasg",
+      "stars": 3545,
+      "files": 102,
+      "violations": 0
+    },
+    {
+      "repo": "unfoldadmin/django-unfold",
+      "stars": 3530,
+      "files": 105,
+      "violations": 0
+    },
+    {
+      "repo": "modoboa/modoboa",
+      "stars": 3506,
+      "files": 608,
+      "violations": 4
+    },
+    {
+      "repo": "pinry/pinry",
+      "stars": 3385,
+      "files": 75,
+      "violations": 0
+    },
+    {
+      "repo": "django-import-export/django-import-export",
+      "stars": 3328,
+      "files": 109,
+      "violations": 0
+    },
+    {
+      "repo": "django-oauth/django-oauth-toolkit",
+      "stars": 3327,
+      "files": 126,
+      "violations": 0
+    },
+    {
+      "repo": "joke2k/django-environ",
+      "stars": 3163,
+      "files": 20,
+      "violations": 0
+    },
+    {
+      "repo": "ml-tooling/opyrator",
+      "stars": 3136,
+      "files": 37,
+      "violations": 13
+    },
+    {
+      "repo": "milesmcc/shynet",
+      "stars": 3136,
+      "files": 78,
+      "violations": 2
+    },
+    {
+      "repo": "docarray/docarray",
+      "stars": 3121,
+      "files": 359,
+      "violations": 9
+    },
+    {
+      "repo": "swirlai/swirl-search",
+      "stars": 3032,
       "files": 115,
+      "violations": 14
+    },
+    {
+      "repo": "raullenchai/Rapid-MLX",
+      "stars": 3005,
+      "files": 523,
+      "violations": 87
+    },
+    {
+      "repo": "ciur/papermerge",
+      "stars": 2924,
+      "files": 83,
+      "violations": 0
+    },
+    {
+      "repo": "tiangolo/uvicorn-gunicorn-fastapi-docker",
+      "stars": 2912,
+      "files": 5,
+      "violations": 0
+    },
+    {
+      "repo": "viewflow/viewflow",
+      "stars": 2864,
+      "files": 178,
+      "violations": 0
+    },
+    {
+      "repo": "FuzzyGrim/Yamtrack",
+      "stars": 2855,
+      "files": 274,
+      "violations": 17
+    },
+    {
+      "repo": "tfranzel/drf-spectacular",
+      "stars": 2842,
+      "files": 98,
+      "violations": 0
+    },
+    {
+      "repo": "babybuddy/babybuddy",
+      "stars": 2803,
+      "files": 191,
+      "violations": 0
+    },
+    {
+      "repo": "lxf746/any-auto-register",
+      "stars": 2778,
+      "files": 239,
+      "violations": 203
+    },
+    {
+      "repo": "opencve/opencve",
+      "stars": 2749,
+      "files": 242,
+      "violations": 0
+    },
+    {
+      "repo": "evansd/whitenoise",
+      "stars": 2746,
+      "files": 27,
+      "violations": 0
+    },
+    {
+      "repo": "rafalp/Misago",
+      "stars": 2729,
+      "files": 2043,
+      "violations": 13
+    },
+    {
+      "repo": "django-commons/django-unicorn",
+      "stars": 2655,
+      "files": 167,
+      "violations": 1
+    },
+    {
+      "repo": "django-webpack/django-webpack-loader",
+      "stars": 2544,
+      "files": 52,
+      "violations": 0
+    },
+    {
+      "repo": "crossbario/autobahn-python",
+      "stars": 2537,
+      "files": 438,
+      "violations": 12
+    },
+    {
+      "repo": "mongodb/motor",
+      "stars": 2530,
+      "files": 76,
+      "violations": 11
+    },
+    {
+      "repo": "supabase/supabase-py",
+      "stars": 2526,
+      "files": 166,
+      "violations": 7
+    },
+    {
+      "repo": "allegro/ralph",
+      "stars": 2503,
+      "files": 985,
+      "violations": 2
+    },
+    {
+      "repo": "paulpierre/RasaGPT",
+      "stars": 2464,
+      "files": 11,
+      "violations": 7
+    },
+    {
+      "repo": "wsvincent/lithium",
+      "stars": 2463,
+      "files": 23,
+      "violations": 0
+    },
+    {
+      "repo": "CJackHwang/AIstudioProxyAPI",
+      "stars": 2431,
+      "files": 293,
+      "violations": 178
+    },
+    {
+      "repo": "pretix/pretix",
+      "stars": 2429,
+      "files": 1212,
+      "violations": 78
+    },
+    {
+      "repo": "wassim249/fastapi-langgraph-agent-production-ready-template",
+      "stars": 2421,
+      "files": 44,
+      "violations": 6
+    },
+    {
+      "repo": "jazzband/django-push-notifications",
+      "stars": 2390,
+      "files": 53,
+      "violations": 1
+    },
+    {
+      "repo": "kmmbvnr/django-fsm",
+      "stars": 2347,
+      "files": 36,
+      "violations": 0
+    },
+    {
+      "repo": "mirumee/ariadne",
+      "stars": 2344,
+      "files": 184,
+      "violations": 3
+    },
+    {
+      "repo": "zostera/django-bootstrap3",
+      "stars": 2336,
+      "files": 31,
+      "violations": 0
+    },
+    {
+      "repo": "MicroPyramid/Django-CRM",
+      "stars": 2327,
+      "files": 441,
+      "violations": 41
+    },
+    {
+      "repo": "Suor/django-cacheops",
+      "stars": 2268,
+      "files": 38,
+      "violations": 0
+    },
+    {
+      "repo": "wemake-services/wemake-django-template",
+      "stars": 2258,
+      "files": 57,
+      "violations": 0
+    },
+    {
+      "repo": "wooey/Wooey",
+      "stars": 2233,
+      "files": 156,
+      "violations": 5
+    },
+    {
+      "repo": "widgetti/solara",
+      "stars": 2163,
+      "files": 458,
+      "violations": 33
+    },
+    {
+      "repo": "python-social-auth/social-app-django",
+      "stars": 2133,
+      "files": 47,
+      "violations": 0
+    },
+    {
+      "repo": "suitenumerique/meet",
+      "stars": 2108,
+      "files": 216,
+      "violations": 6
+    },
+    {
+      "repo": "evennia/evennia",
+      "stars": 2072,
+      "files": 647,
+      "violations": 12
+    },
+    {
+      "repo": "fabiocaccamo/django-admin-interface",
+      "stars": 2042,
+      "files": 56,
+      "violations": 0
+    },
+    {
+      "repo": "Cloud-CV/EvalAI",
+      "stars": 2023,
+      "files": 458,
+      "violations": 11
+    },
+    {
+      "repo": "ansible-community/ara",
+      "stars": 2019,
+      "files": 109,
+      "violations": 4
+    },
+    {
+      "repo": "jieter/django-tables2",
+      "stars": 2014,
+      "files": 86,
+      "violations": 0
+    },
+    {
+      "repo": "laurentS/slowapi",
+      "stars": 2011,
+      "files": 10,
+      "violations": 0
+    },
+    {
+      "repo": "jwadow/kiro-gateway",
+      "stars": 1994,
+      "files": 68,
+      "violations": 50
+    },
+    {
+      "repo": "Soju06/codex-lb",
+      "stars": 1990,
+      "files": 636,
+      "violations": 97
+    },
+    {
+      "repo": "BetaStreetOmnis/xhs_ai_publisher",
+      "stars": 1988,
+      "files": 88,
+      "violations": 235
+    },
+    {
+      "repo": "dfunckt/django-rules",
+      "stars": 1977,
+      "files": 34,
+      "violations": 0
+    },
+    {
+      "repo": "benavlabs/FastAPI-boilerplate",
+      "stars": 1970,
+      "files": 208,
+      "violations": 4
+    },
+    {
+      "repo": "openapi-generators/openapi-python-client",
+      "stars": 1963,
+      "files": 347,
+      "violations": 0
+    },
+    {
+      "repo": "the-momentum/open-wearables",
+      "stars": 1962,
+      "files": 603,
+      "violations": 25
+    },
+    {
+      "repo": "django-notifications/django-notifications",
+      "stars": 1954,
+      "files": 45,
+      "violations": 0
+    },
+    {
+      "repo": "photonixapp/photonix",
+      "stars": 1950,
+      "files": 150,
+      "violations": 5
+    },
+    {
+      "repo": "typeddjango/django-stubs",
+      "stars": 1948,
+      "files": 134,
+      "violations": 0
+    },
+    {
+      "repo": "rq/django-rq",
+      "stars": 1947,
+      "files": 67,
+      "violations": 2
+    },
+    {
+      "repo": "doableware/djongo",
+      "stars": 1934,
+      "files": 27,
+      "violations": 0
+    },
+    {
+      "repo": "django-wiki/django-wiki",
+      "stars": 1921,
+      "files": 207,
+      "violations": 1
+    },
+    {
+      "repo": "anymail/django-anymail",
+      "stars": 1887,
+      "files": 122,
+      "violations": 0
+    },
+    {
+      "repo": "twtrubiks/docker-tutorial",
+      "stars": 1880,
+      "files": 13,
+      "violations": 0
+    },
+    {
+      "repo": "jazzband/django-two-factor-auth",
+      "stars": 1872,
+      "files": 121,
+      "violations": 0
+    },
+    {
+      "repo": "yourlabs/django-autocomplete-light",
+      "stars": 1871,
+      "files": 331,
+      "violations": 1
+    },
+    {
+      "repo": "long2ice/fastapi-cache",
+      "stars": 1865,
+      "files": 19,
+      "violations": 0
+    },
+    {
+      "repo": "iMerica/dj-rest-auth",
+      "stars": 1858,
+      "files": 56,
+      "violations": 0
+    },
+    {
+      "repo": "Kav-K/GPTDiscord",
+      "stars": 1855,
+      "files": 39,
+      "violations": 50
+    },
+    {
+      "repo": "django-cms/django-filer",
+      "stars": 1852,
+      "files": 130,
+      "violations": 3
+    },
+    {
+      "repo": "brightbeanxyz/brightbean-studio",
+      "stars": 1847,
+      "files": 431,
+      "violations": 0
+    },
+    {
+      "repo": "uselotus/lotus",
+      "stars": 1827,
+      "files": 364,
+      "violations": 27
+    },
+    {
+      "repo": "django-commons/django-polymorphic",
+      "stars": 1823,
+      "files": 170,
+      "violations": 0
+    },
+    {
+      "repo": "ormar-orm/ormar",
+      "stars": 1805,
+      "files": 333,
+      "violations": 8
+    },
+    {
+      "repo": "alanjds/drf-nested-routers",
+      "stars": 1794,
+      "files": 27,
+      "violations": 0
+    },
+    {
+      "repo": "dj-stripe/dj-stripe",
+      "stars": 1781,
+      "files": 126,
+      "violations": 1
+    },
+    {
+      "repo": "django-money/django-money",
+      "stars": 1777,
+      "files": 66,
+      "violations": 0
+    },
+    {
+      "repo": "danielgtaylor/python-betterproto",
+      "stars": 1766,
+      "files": 88,
+      "violations": 2
+    },
+    {
+      "repo": "pmh1314520/WebRPA",
+      "stars": 1760,
+      "files": 212,
+      "violations": 531
+    },
+    {
+      "repo": "timonweb/django-tailwind",
+      "stars": 1746,
+      "files": 37,
+      "violations": 0
+    },
+    {
+      "repo": "ronf/asyncssh",
+      "stars": 1742,
+      "files": 147,
+      "violations": 116
+    },
+    {
+      "repo": "wyeeeee/hajimi",
+      "stars": 1740,
+      "files": 42,
+      "violations": 3
+    },
+    {
+      "repo": "django-hijack/django-hijack",
+      "stars": 1726,
+      "files": 32,
+      "violations": 0
+    },
+    {
+      "repo": "sumerc/yappi",
+      "stars": 1716,
+      "files": 20,
       "violations": 16
     },
     {
-      "repo": "hunvreus/devpush",
-      "stars": 4681,
-      "files": 53,
+      "repo": "jimmy201602/webterminal",
+      "stars": 1716,
+      "files": 117,
+      "violations": 19
+    },
+    {
+      "repo": "cirospaciari/socketify.py",
+      "stars": 1713,
+      "files": 95,
+      "violations": 15
+    },
+    {
+      "repo": "python-kasa/python-kasa",
+      "stars": 1702,
+      "files": 269,
+      "violations": 21
+    },
+    {
+      "repo": "GeoNode/geonode",
+      "stars": 1686,
+      "files": 1145,
+      "violations": 81
+    },
+    {
+      "repo": "mdn/django-locallibrary-tutorial",
+      "stars": 1684,
+      "files": 45,
+      "violations": 0
+    },
+    {
+      "repo": "django-helpdesk/django-helpdesk",
+      "stars": 1679,
+      "files": 126,
+      "violations": 1
+    },
+    {
+      "repo": "uriyyo/fastapi-pagination",
+      "stars": 1665,
+      "files": 123,
+      "violations": 1
+    },
+    {
+      "repo": "pytest-dev/pytest-asyncio",
+      "stars": 1644,
+      "files": 63,
+      "violations": 0
+    },
+    {
+      "repo": "pgjones/hypercorn",
+      "stars": 1584,
+      "files": 74,
+      "violations": 6
+    },
+    {
+      "repo": "omnilib/aiosqlite",
+      "stars": 1558,
+      "files": 11,
+      "violations": 10
+    },
+    {
+      "repo": "amisadmin/fastapi-amis-admin",
+      "stars": 1557,
+      "files": 75,
+      "violations": 1
+    },
+    {
+      "repo": "dj-bolt/django-bolt",
+      "stars": 1538,
+      "files": 353,
+      "violations": 15
+    },
+    {
+      "repo": "nickjj/docker-django-example",
+      "stars": 1528,
+      "files": 19,
+      "violations": 0
+    },
+    {
+      "repo": "benavlabs/fastcrud",
+      "stars": 1526,
+      "files": 190,
+      "violations": 0
+    },
+    {
+      "repo": "laixintao/python-parallel-programming-cookbook-cn",
+      "stars": 1522,
+      "files": 2,
+      "violations": 0
+    },
+    {
+      "repo": "skernelx/tavily-key-generator",
+      "stars": 1513,
+      "files": 15,
+      "violations": 18
+    },
+    {
+      "repo": "aio-libs/yarl",
+      "stars": 1490,
+      "files": 34,
+      "violations": 0
+    },
+    {
+      "repo": "teamhide/fastapi-boilerplate",
+      "stars": 1489,
+      "files": 124,
+      "violations": 0
+    },
+    {
+      "repo": "mosquito/aio-pika",
+      "stars": 1468,
+      "files": 73,
+      "violations": 34
+    },
+    {
+      "repo": "trallnag/prometheus-fastapi-instrumentator",
+      "stars": 1465,
+      "files": 21,
+      "violations": 2
+    },
+    {
+      "repo": "FreeOpcUa/opcua-asyncio",
+      "stars": 1440,
+      "files": 219,
+      "violations": 21
+    },
+    {
+      "repo": "vstorm-co/full-stack-ai-agent-template",
+      "stars": 1438,
+      "files": 326,
+      "violations": 1
+    },
+    {
+      "repo": "aio-libs/aiocache",
+      "stars": 1433,
+      "files": 56,
+      "violations": 14
+    },
+    {
+      "repo": "aio-libs/aiopg",
+      "stars": 1430,
+      "files": 44,
+      "violations": 131
+    },
+    {
+      "repo": "beenuar/AiSOC",
+      "stars": 1414,
+      "files": 886,
+      "violations": 44
+    },
+    {
+      "repo": "aio-libs/aiobotocore",
+      "stars": 1414,
+      "files": 104,
+      "violations": 10
+    },
+    {
+      "repo": "akfamily/aktools",
+      "stars": 1413,
+      "files": 27,
+      "violations": 0
+    },
+    {
+      "repo": "marshmallow-code/webargs",
+      "stars": 1409,
+      "files": 48,
+      "violations": 0
+    },
+    {
+      "repo": "insistence/RuoYi-Vue3-FastAPI",
+      "stars": 1401,
+      "files": 381,
+      "violations": 12
+    },
+    {
+      "repo": "koxudaxi/fastapi-code-generator",
+      "stars": 1397,
+      "files": 141,
+      "violations": 0
+    },
+    {
+      "repo": "aio-libs/aiokafka",
+      "stars": 1390,
+      "files": 111,
+      "violations": 19
+    },
+    {
+      "repo": "guillevc/yubal",
+      "stars": 1354,
+      "files": 117,
+      "violations": 6
+    },
+    {
+      "repo": "slackapi/bolt-python",
+      "stars": 1313,
+      "files": 586,
+      "violations": 1
+    },
+    {
+      "repo": "redis/redis-om-python",
+      "stars": 1313,
+      "files": 56,
       "violations": 32
     },
     {
-      "repo": "graphql-python/graphene-django",
-      "stars": 4390,
-      "files": 163,
-      "violations": 1
+      "repo": "devnen/Chatterbox-TTS-Server",
+      "stars": 1309,
+      "files": 7,
+      "violations": 10
     },
     {
-      "repo": "amidaware/tacticalrmm",
-      "stars": 4351,
-      "files": 644,
-      "violations": 53
+      "repo": "ParallelSSH/parallel-ssh",
+      "stars": 1279,
+      "files": 47,
+      "violations": 37
     },
     {
-      "repo": "JoshuaC215/agent-service-toolkit",
-      "stars": 4339,
+      "repo": "vargasjona/fastapi-alembic-sqlmodel-async",
+      "stars": 1269,
+      "files": 90,
+      "violations": 3
+    },
+    {
+      "repo": "fim-ai/fim-one",
+      "stars": 1267,
+      "files": 593,
+      "violations": 62
+    },
+    {
+      "repo": "Amm1rr/WebAI-to-API",
+      "stars": 1267,
+      "files": 104,
+      "violations": 39
+    },
+    {
+      "repo": "zhanymkanov/fastapi_production_template",
+      "stars": 1254,
+      "files": 10,
+      "violations": 0
+    },
+    {
+      "repo": "brainix/pottery",
+      "stars": 1244,
+      "files": 39,
+      "violations": 0
+    },
+    {
+      "repo": "nats-io/nats.py",
+      "stars": 1231,
+      "files": 127,
+      "violations": 254
+    },
+    {
+      "repo": "emmett-framework/emmett",
+      "stars": 1225,
+      "files": 118,
+      "violations": 16
+    },
+    {
+      "repo": "MarshalX/yandex-music-api",
+      "stars": 1219,
+      "files": 544,
+      "violations": 0
+    },
+    {
+      "repo": "itamarst/eliot",
+      "stars": 1185,
       "files": 70,
+      "violations": 2
+    },
+    {
+      "repo": "SalesforceAIResearch/enterprise-deep-research",
+      "stars": 1184,
+      "files": 66,
+      "violations": 25
+    },
+    {
+      "repo": "jookies/jasmin",
+      "stars": 1184,
+      "files": 197,
+      "violations": 3
+    },
+    {
+      "repo": "yezz123/authx",
+      "stars": 1177,
+      "files": 70,
+      "violations": 0
+    },
+    {
+      "repo": "art049/odmantic",
+      "stars": 1173,
+      "files": 172,
+      "violations": 0
+    },
+    {
+      "repo": "asdfghj1237890/WebVideo2NAS",
+      "stars": 1151,
+      "files": 41,
+      "violations": 32
+    },
+    {
+      "repo": "Ricky-7-Yan/intelligent-audit-system",
+      "stars": 1147,
+      "files": 9,
       "violations": 1
+    },
+    {
+      "repo": "postlund/pyatv",
+      "stars": 1130,
+      "files": 280,
+      "violations": 48
+    },
+    {
+      "repo": "developmentseed/titiler",
+      "stars": 1117,
+      "files": 95,
+      "violations": 2
+    },
+    {
+      "repo": "blueswen/fastapi-observability",
+      "stars": 1105,
+      "files": 3,
+      "violations": 2
+    },
+    {
+      "repo": "ReturnFI/Blitz",
+      "stars": 1093,
+      "files": 107,
+      "violations": 8
+    },
+    {
+      "repo": "sibson/redbeat",
+      "stars": 1045,
+      "files": 15,
+      "violations": 0
     }
   ]
 }
