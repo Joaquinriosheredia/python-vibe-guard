@@ -1349,6 +1349,122 @@ async def call_api():
     assert not any(v.rule_id == "PYVIBE-019" for v in violations)
 
 
+# ─── PYVIBE-020: put_nowait() without QueueFull handler ──────────────────────
+
+def test_020_detects_put_nowait_in_async_def():
+    # async context — most common pattern from the 100-repo scan
+    src = """
+import asyncio
+
+async def producer(queue, item):
+    queue.put_nowait(item)
+"""
+    violations = analyze_source(src)
+    v020 = [v for v in violations if v.rule_id == "PYVIBE-020"]
+    assert len(v020) == 1
+    assert v020[0].severity == "WARNING"
+    assert v020[0].function_name == "producer"
+
+
+def test_020_detects_put_nowait_in_sync_def():
+    # sync context (strawberry/kopf pattern — sync callback feeds an asyncio.Queue)
+    src = """
+import asyncio
+
+def websocket_receive(self, text_data=None):
+    self.message_queue.put_nowait({"message": text_data})
+"""
+    violations = analyze_source(src)
+    v020 = [v for v in violations if v.rule_id == "PYVIBE-020"]
+    assert len(v020) == 1
+    assert v020[0].function_name == "websocket_receive"
+
+
+def test_020_detects_put_nowait_at_module_level():
+    src = """
+import asyncio
+
+q = asyncio.Queue(maxsize=10)
+q.put_nowait("startup-event")
+"""
+    violations = analyze_source(src)
+    v020 = [v for v in violations if v.rule_id == "PYVIBE-020"]
+    assert len(v020) == 1
+    assert v020[0].function_name == "<module>"
+
+
+def test_020_no_false_positive_asyncio_queuefull():
+    src = """
+import asyncio
+
+async def producer(queue, item):
+    try:
+        queue.put_nowait(item)
+    except asyncio.QueueFull:
+        logger.warning("queue full, dropping item")
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-020" for v in violations)
+
+
+def test_020_no_false_positive_bare_queuefull_name():
+    # from asyncio import QueueFull — bare name, still suppresses
+    src = """
+from asyncio import QueueFull
+
+async def producer(queue, item):
+    try:
+        queue.put_nowait(item)
+    except QueueFull:
+        pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-020" for v in violations)
+
+
+def test_020_no_false_positive_broad_exception():
+    # except Exception catches QueueFull — flag suppressed
+    src = """
+async def producer(queue, item):
+    try:
+        queue.put_nowait(item)
+    except Exception:
+        logger.error("failed to enqueue")
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-020" for v in violations)
+
+
+def test_020_no_false_positive_await_put():
+    # await queue.put() is the blocking alternative — different method, no flag
+    src = """
+import asyncio
+
+async def producer(queue, item):
+    await queue.put(item)
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-020" for v in violations)
+
+
+def test_020_no_false_positive_nested_try_outer_catches():
+    # outer try/except asyncio.QueueFull protects inner unguarded put_nowait
+    src = """
+import asyncio
+
+async def producer(queue, item):
+    try:
+        try:
+            queue.put_nowait(item)
+        except ValueError:
+            pass
+    except asyncio.QueueFull:
+        logger.warning("full")
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-020" for v in violations)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

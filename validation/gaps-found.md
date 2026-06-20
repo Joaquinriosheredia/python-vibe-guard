@@ -148,11 +148,11 @@ except asyncio.QueueFull:
 
 ## Summary
 
-| Gap | Pattern | Repos (100-sample) | Severity | Next rule candidate |
-|-----|---------|-------------------|----------|-------------------|
-| Signal-handler fire-and-forget | `add_signal_handler(sig, lambda: create_task(...))` | 5+ | WARNING | PYVIBE-020 |
-| `aiohttp.ClientSession()` not in `async with` | `self.session = aiohttp.ClientSession()` | 7 | WARNING | PYVIBE-020 or PYVIBE-021 |
-| `Queue.put_nowait()` without QueueFull handler | `queue.put_nowait(x)` in async def | 25 | WARNING | PYVIBE-022 |
+| Gap | Pattern | Repos (100-sample) | Severity | Status |
+|-----|---------|-------------------|----------|--------|
+| Signal-handler fire-and-forget | `add_signal_handler(sig, lambda: create_task(...))` | 5+ | WARNING | open — candidate PYVIBE-021 |
+| `aiohttp.ClientSession()` not in `async with` | `self.session = aiohttp.ClientSession()` | 7 | WARNING | open — candidate PYVIBE-022 |
+| `Queue.put_nowait()` without QueueFull handler | `queue.put_nowait(x)` in async def | 25 | WARNING | **IMPLEMENTED** as PYVIBE-020 (v0.7.0) |
 
 The fire-and-forget signal handler and the aiohttp session leak are close enough in theme (resource lifetime mismanagement) that they could share a single detection pass. The `put_nowait` gap is independent and high-prevalence (25% of repos).
 

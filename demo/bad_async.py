@@ -140,6 +140,11 @@ async def retry_upload(data):
             continue  # retry immediately — no backoff, no sleep
 
 
+# PYVIBE-020 — put_nowait() without asyncio.QueueFull handler → silent data loss
+async def event_producer(queue, event):
+    queue.put_nowait(event)  # raises asyncio.QueueFull if queue is bounded and full
+
+
 # ── Sync context — should produce ZERO findings ───────────────────────────────
 def sync_function():
     time.sleep(1)

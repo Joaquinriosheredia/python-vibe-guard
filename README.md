@@ -19,7 +19,7 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Nineteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Twenty patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
 
 ### A. Event Loop Blocking
 
@@ -60,17 +60,19 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 | PYVIBE-017 | `except Exception: pass` / bare `except: pass` (empty body) | any | Swallows all errors silently; bare except also catches `KeyboardInterrupt`/`SystemExit` |
 | PYVIBE-018 | `while True:` inside `async def` with no `await` in body | `async def` | Event loop blocked indefinitely; CPU hits 100% |
 | PYVIBE-019 | retry `for`/`while` loop in `async def` with no backoff in `except` | `async def` | Tight retry loop on failure: thousands of failed requests/sec, cascading failures |
+| PYVIBE-020 | `put_nowait()` without `asyncio.QueueFull` handler | any | `QueueFull` propagates unhandled; item is silently lost on bounded queues |
 
 **Severity notes:**
 - PYVIBE-017: bare `except` → `CRITICAL` (catches `KeyboardInterrupt`/`SystemExit`); `except Exception` with empty body → `WARNING`. Specific exceptions (`except ValueError: pass`) are not flagged.
 - PYVIBE-013 in test files: automatically downgraded to `WARNING` in files matching `test_*.py`, `*_test.py`, or paths under `tests/` — exceptions should propagate for assertions in test code.
 - PYVIBE-019: `WARNING` — flags `except` that ends with `continue` or is solely `pass` with no sleep/backoff call. Suppressed when an escalation pattern (`if … : raise/break`) is present.
+- PYVIBE-020: `WARNING` — fires in any function context (sync and async). Suppressed when the `put_nowait()` is inside a `try` whose handlers include `asyncio.QueueFull`, `QueueFull`, bare `except`, or `Exception`.
 
 ---
 
 ## Validation
 
-### 100-repo sweep (automated, v0.6.0)
+### 100-repo sweep (automated, v0.7.0)
 
 Automated scan of 100 GitHub repos (`stars:>100`, updated last year, async Python keywords). Script: [`validation/run_massive_scan.py`](validation/run_massive_scan.py).
 
@@ -206,7 +208,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.6.0
+    rev: v0.7.0
     hooks:
       - id: python-vibe-guard
 ```
@@ -237,7 +239,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 python -m pyvibe demo/bad_async.py
 ```
 
-Expected: 19 findings (17 CRITICAL + 2 WARNING for PYVIBE-017 `except Exception` and PYVIBE-019 retry without backoff), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
+Expected: 20 findings (17 CRITICAL + 3 WARNING for PYVIBE-017 `except Exception`, PYVIBE-019 retry without backoff, and PYVIBE-020 `put_nowait` without handler), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
 
 ---
 
@@ -249,7 +251,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-115 tests: true positives + false-positive guards for every rule.
+123 tests: true positives + false-positive guards for every rule.
 
 ---
 
