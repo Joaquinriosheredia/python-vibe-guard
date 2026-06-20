@@ -1,7 +1,8 @@
 """
-demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-018).
+demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-019).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 18 findings (17 CRITICAL + 1 WARNING for PYVIBE-017 except Exception).
+Expected: 19 findings (17 CRITICAL + 2 WARNING for PYVIBE-017 except Exception
+and PYVIBE-019 retry without backoff).
 
 sync_function() at the bottom uses the same async-specific patterns in sync
 context and produces ZERO findings for those rules.
@@ -128,6 +129,15 @@ async def process_order_silently():
 async def background_worker():
     while True:
         check_queue()  # no await — event loop never yields
+
+
+# PYVIBE-019 — retry loop without backoff inside async def → tight loop on failure
+async def retry_upload(data):
+    for attempt in range(5):
+        try:
+            return await client.upload(data)
+        except Exception:
+            continue  # retry immediately — no backoff, no sleep
 
 
 # ── Sync context — should produce ZERO findings ───────────────────────────────

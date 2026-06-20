@@ -1247,6 +1247,108 @@ async def outer():
     assert len(v018) == 1
 
 
+# ─── PYVIBE-019: retry loop without backoff ──────────────────────────────────
+
+def test_019_detects_for_loop_retry_no_backoff():
+    src = """
+async def call_api():
+    for attempt in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            continue
+"""
+    violations = analyze_source(src)
+    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
+    assert len(v019) == 1
+    assert v019[0].severity == "WARNING"
+
+
+def test_019_detects_while_loop_retry_pass():
+    src = """
+async def poll():
+    while running:
+        try:
+            check_status()
+        except Exception:
+            pass
+"""
+    violations = analyze_source(src)
+    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
+    assert len(v019) == 1
+
+
+def test_019_no_false_positive_escalation_if_raise():
+    src = """
+async def call_api():
+    for attempt in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            if attempt == 2:
+                raise
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_backoff_asyncio_sleep():
+    src = """
+import asyncio
+
+async def call_api():
+    for attempt in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            await asyncio.sleep(2 ** attempt)
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_backoff_library_name():
+    src = """
+async def call_api():
+    for attempt in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            await exponential_backoff(attempt)
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_sync_context():
+    src = """
+def call_api():
+    for attempt in range(3):
+        try:
+            return client.post(url)
+        except Exception:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_break_no_retry():
+    src = """
+async def call_api():
+    for attempt in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            break
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

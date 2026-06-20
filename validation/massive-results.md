@@ -1,6 +1,6 @@
 # python-vibe-guard — Validation Results
 
-**Scanner version:** 0.5.0 (18 rules, 108 tests)  
+**Scanner version:** 0.6.0 (19 rules, 115 tests)  
 **Scan date:** 2026-06-19  
 **Command:** `python -m pyvibe <repo> --json`
 

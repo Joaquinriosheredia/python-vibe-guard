@@ -19,34 +19,52 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Eighteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Nineteen patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+
+### A. Event Loop Blocking
+
+Synchronous calls inside `async def` — each stalls the event loop for its entire duration, serializing all concurrent requests.
 
 | Rule | Pattern | Gate | Runtime effect |
 |------|---------|------|----------------|
 | PYVIBE-001 | `time.sleep()` inside `async def` | `async def` | Freezes entire event loop for sleep duration |
 | PYVIBE-002 | `requests.*` inside `async def` | `async def` | Blocks OS thread, serializes all concurrent I/O |
-| PYVIBE-003 | `asyncio.run()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
-| PYVIBE-004 | `threading.Lock/RLock/…` inside `async def` | `async def` | Blocks event loop under contention |
-| PYVIBE-005 | `@app.task` / `@shared_task` without `soft_time_limit` or `time_limit` | decorator | Worker hangs forever if external call never returns |
-| PYVIBE-006 | `ContextVar.set()` inside `async def` without `try/finally reset()` | `async def` | Context leaks into sibling async tasks |
 | PYVIBE-007 | `subprocess.run/call/check_output/Popen` inside `async def` | `async def` | Blocks OS thread for entire subprocess duration |
 | PYVIBE-008 | `sqlite3.connect()` inside `async def` | `async def` | Synchronous file I/O blocks the event loop |
 | PYVIBE-009 | `open()` builtin inside `async def` | `async def` | Synchronous file I/O blocks the event loop |
 | PYVIBE-010 | `httpx.get/post/put/…` inside `async def` | `async def` | httpx sync API blocks OS thread for full HTTP round-trip |
 | PYVIBE-011 | `os.system/popen/waitpid` inside `async def` | `async def` | Blocking OS calls with no direct async equivalent |
+| PYVIBE-016 | `httpx.Client()` instantiated inside `async def` | `async def` | Sync client blocks OS thread per request; `httpx.AsyncClient()` is excluded |
+
+### B. Async Lifecycle Misuse
+
+Incorrect use of asyncio primitives that raise `RuntimeError` at runtime or silently discard tasks mid-execution.
+
+| Rule | Pattern | Gate | Runtime effect |
+|------|---------|------|----------------|
+| PYVIBE-003 | `asyncio.run()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
 | PYVIBE-012 | `asyncio.create_task()` with discarded return value | `async def` | Task GC'd mid-execution; exceptions silently swallowed |
 | PYVIBE-013 | `asyncio.gather()` without `return_exceptions=True` | `async def` | First exception leaks remaining tasks; no per-task error handling |
 | PYVIBE-014 | `asyncio.ensure_future()` with discarded return value | `async def` | Same GC hazard as PYVIBE-012; pre-3.7 API still common in older codebases |
 | PYVIBE-015 | `loop.run_until_complete()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
-| PYVIBE-016 | `httpx.Client()` instantiated inside `async def` | `async def` | Sync client blocks OS thread per request; `httpx.AsyncClient()` is excluded |
+
+### C. Concurrency & State Hazards
+
+Patterns that introduce data races, swallowed errors, or runaway loops under concurrent async load.
+
+| Rule | Pattern | Gate | Runtime effect |
+|------|---------|------|----------------|
+| PYVIBE-004 | `threading.Lock/RLock/…` inside `async def` | `async def` | Blocks event loop under contention |
+| PYVIBE-005 | `@app.task` / `@shared_task` without `soft_time_limit` or `time_limit` | decorator | Worker hangs forever if external call never returns |
+| PYVIBE-006 | `ContextVar.set()` inside `async def` without `try/finally reset()` | `async def` | Context leaks into sibling async tasks |
 | PYVIBE-017 | `except Exception: pass` / bare `except: pass` (empty body) | any | Swallows all errors silently; bare except also catches `KeyboardInterrupt`/`SystemExit` |
 | PYVIBE-018 | `while True:` inside `async def` with no `await` in body | `async def` | Event loop blocked indefinitely; CPU hits 100% |
-
-Rules PYVIBE-001–004, 006–016, 018 fire **only inside `async def`**. PYVIBE-005 fires on the decorator. PYVIBE-017 fires in any function context (sync and async).
+| PYVIBE-019 | retry `for`/`while` loop in `async def` with no backoff in `except` | `async def` | Tight retry loop on failure: thousands of failed requests/sec, cascading failures |
 
 **Severity notes:**
 - PYVIBE-017: bare `except` → `CRITICAL` (catches `KeyboardInterrupt`/`SystemExit`); `except Exception` with empty body → `WARNING`. Specific exceptions (`except ValueError: pass`) are not flagged.
 - PYVIBE-013 in test files: automatically downgraded to `WARNING` in files matching `test_*.py`, `*_test.py`, or paths under `tests/` — exceptions should propagate for assertions in test code.
+- PYVIBE-019: `WARNING` — flags `except` that ends with `continue` or is solely `pass` with no sleep/backoff call. Suppressed when an escalation pattern (`if … : raise/break`) is present.
 
 ---
 
@@ -186,7 +204,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: python-vibe-guard
 ```
@@ -217,7 +235,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 python -m pyvibe demo/bad_async.py
 ```
 
-Expected: 18 findings (17 CRITICAL + 1 WARNING for PYVIBE-017 `except Exception`), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
+Expected: 19 findings (17 CRITICAL + 2 WARNING for PYVIBE-017 `except Exception` and PYVIBE-019 retry without backoff), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
 
 ---
 
@@ -229,7 +247,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-108 tests: true positives + false-positive guards for every rule.
+115 tests: true positives + false-positive guards for every rule.
 
 ---
 

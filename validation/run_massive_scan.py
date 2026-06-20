@@ -198,7 +198,7 @@ def build_aggregate(scan_results: list[dict]) -> dict:
     ]
 
     return {
-        "version": "0.5.0",
+        "version": "0.6.0",
         "scan_date": date.today().isoformat(),
         "total_repos": len(scan_results),
         "total_files": total_files,
