@@ -9,12 +9,12 @@
 ## Evidence Review Progress
 
 ```
-[█████░░░░░░░░░░░░░░░]  5/20 (25%)
+[██████░░░░░░░░░░░░░░]  6/20 (30%)
 ```
 
 | Completado | Pendiente |
 |-----------|----------|
-| PYVIBE-001 (A+), PYVIBE-005 (A), PYVIBE-009 (B), PYVIBE-013 (A), PYVIBE-017 (A) | 15 reglas restantes |
+| PYVIBE-001 (A+), PYVIBE-005 (A), PYVIBE-009 (B), PYVIBE-013 (A), PYVIBE-017 (A), PYVIBE-019 (A) | 14 reglas restantes |
 
 ---
 
@@ -66,11 +66,16 @@ Leyenda columna Recomendación:
 | [PYVIBE-016](accepted/PYVIBE-016.md) — `httpx.Client()` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.8% (2/250) | ⏳ Pendiente |
 | [PYVIBE-017](accepted/PYVIBE-017.md) — `except` silencioso en async def | Manejo de errores | **A** | CRITICAL / WARNING † | Medium-High | Medium | Medium | 48.8% (122/250) | ✅ Protocolo v1 + FP Audit |
 | [PYVIBE-018](accepted/PYVIBE-018.md) — `while True` sin `await` | Gestión de tareas | B | CRITICAL | — | — | — | 6.8% (17/250) | ⏳ Pendiente |
-| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | B | WARNING | — | — | — | 32.8% (82/250) | ⏳ Pendiente |
+| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | **A** | WARNING ‡ | High | High (I/O) | High | 32.8% (82/250) | ✅ Protocolo v1 |
 | [PYVIBE-020](accepted/PYVIBE-020.md) — `put_nowait()` sin handler `QueueFull` | Manejo de errores | B | WARNING | — | — | — | 16.4% (41/250) ³ | ⏳ Pendiente |
 
 ² PYVIBE-011: 0 hits en 250 repos — Evidence B se mantiene porque el patrón es real aunque infrecuente en repos de alta estrella.  
 ³ PYVIBE-020: debut en sweep 250 (sin baseline en 100 repos). Tasa de debut 16.4% es sólida para regla nueva.
+
+**‡ PYVIBE-019 Recomendación detallada:**
+- Retries de red (HTTP, gRPC, DB remota): WARNING justificado — thundering herd documentado
+- Retries en memoria (parsing, encodings, locks locales): FP estructural — tenacity `wait_none()` es aceptable
+- Runtime Impact columna indica High para I/O; impacto negligible para ops locales
 
 **† PYVIBE-017 Recomendación detallada:**
 - `bare except: pass` → `CRITICAL` (captura `KeyboardInterrupt`/`SystemExit`)
@@ -92,7 +97,7 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | Bloqueo de event loop | 001, 002, 007, 008, 009, 010, 011, 016 | 001 ✅, 009 ✅ |
 | Gestión de tareas | 012, 013, 014, 018 | 013 ✅ |
 | Manejo de errores | 017, 020 | 017 ✅ |
-| Resiliencia | 005, 019 | 005 ✅ |
+| Resiliencia | 005, 019 | 005 ✅, 019 ✅ |
 | Primitiva incorrecta | 003, 004, 015 | — |
 | Estado / Contexto | 006 | — |
 
@@ -103,18 +108,18 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | Nivel | Reglas |
 |-------|--------|
 | A+ | PYVIBE-001 |
-| A  | PYVIBE-005, PYVIBE-013, PYVIBE-017 |
+| A  | PYVIBE-005, PYVIBE-013, PYVIBE-017, PYVIBE-019 |
 | B (protocolo completo) | PYVIBE-009 |
-| B (protocolo pendiente) | PYVIBE-002, 003, 004, 006, 007, 008, 010, 011, 012, 014, 015, 016, 018, 019, 020 |
+| B (protocolo pendiente) | PYVIBE-002, 003, 004, 006, 007, 008, 010, 011, 012, 014, 015, 016, 018, 020 |
 | C  | — |
 
-**Protocolo completado:** 5/20 reglas (25%)
+**Protocolo completado:** 6/20 reglas (30%)
 
 ---
 
 ## Nota sobre las reglas en estado B (protocolo pendiente)
 
-Las 15 reglas marcadas como "B (pendiente de protocolo completo)" no son menos
+Las 14 reglas marcadas como "B (pendiente de protocolo completo)" no son menos
 válidas que las cinco ya investigadas. Evidence B significa que la regla está
 validada en repos reales con hits confirmados — el patrón existe en código de
 producción y el detector funciona. Lo que falta es el recorrido sistemático de
