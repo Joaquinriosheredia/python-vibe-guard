@@ -66,7 +66,7 @@ Leyenda columna Recomendación:
 | [PYVIBE-016](accepted/PYVIBE-016.md) — `httpx.Client()` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.8% (2/250) | ⏳ Pendiente |
 | [PYVIBE-017](accepted/PYVIBE-017.md) — `except` silencioso en async def | Manejo de errores | **A** | CRITICAL / WARNING † | Medium-High | Medium | Medium | 48.8% (122/250) | ✅ Protocolo v1 + FP Audit |
 | [PYVIBE-018](accepted/PYVIBE-018.md) — `while True` sin `await` | Gestión de tareas | B | CRITICAL | — | — | — | 6.8% (17/250) | ⏳ Pendiente |
-| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | **A** | WARNING ‡ | High | High (I/O) | High | 32.8% (82/250) | ✅ Protocolo v1 |
+| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | **A** | WARNING ‡ | High | High (I/O) | High | 32.8% (82/250) | ✅ Protocolo v1 + FP Audit |
 | [PYVIBE-020](accepted/PYVIBE-020.md) — `put_nowait()` sin handler `QueueFull` | Manejo de errores | B | WARNING | — | — | — | 16.4% (41/250) ³ | ⏳ Pendiente |
 
 ² PYVIBE-011: 0 hits en 250 repos — Evidence B se mantiene porque el patrón es real aunque infrecuente en repos de alta estrella.  
@@ -76,6 +76,7 @@ Leyenda columna Recomendación:
 - Retries de red (HTTP, gRPC, DB remota): WARNING justificado — thundering herd documentado
 - Retries en memoria (parsing, encodings, locks locales): FP estructural — tenacity `wait_none()` es aceptable
 - Runtime Impact columna indica High para I/O; impacto negligible para ops locales
+- ⚠️ **FP Audit (jun 2026):** muestra manual de 61 hits → 95.1% FP. Causa raíz: `for item in collection: except: continue` no es retry. Refinamiento del detector recomendado. Ver sección "Auditoría de Falsos Positivos" en PYVIBE-019.md.
 
 **† PYVIBE-017 Recomendación detallada:**
 - `bare except: pass` → `CRITICAL` (captura `KeyboardInterrupt`/`SystemExit`)

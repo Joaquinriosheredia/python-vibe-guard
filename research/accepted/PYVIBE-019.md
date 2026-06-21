@@ -14,7 +14,7 @@ sin `await asyncio.sleep(...)` ni llamada a backoff/jitter entre intentos
 | Repos afectados | 43/100 (43.0%) | 82/250 (32.8%) |
 | Total hits | 408 | 760 |
 | Estabilidad 100→250 | **Media** (−10.2 pp) | |
-| FP documentados (sweep) | 0 reportados | — |
+| FP documentados (sweep) | 0 reportados | ~95% en muestra manual (ver Auditoría FP) |
 
 ## Repos representativos (sweep 250)
 
@@ -337,16 +337,207 @@ async def fetch_with_retry():
 
 ---
 
+## Auditoría de Falsos Positivos — Muestra Manual (61 hits)
+
+### Metodología
+
+Se clonaron 5 repos con hits PYVIBE-019 confirmados, se corrió el analyzer y se
+examinó el código fuente real de cada hit. Se tomó una muestra estratificada de 61
+hits distribuidos entre repos de distintos rangos de hit-count:
+
+| Repo | Hits en sweep | Hits analizados | Descripción |
+|------|--------------|-----------------|-------------|
+| `zhinianboke/xianyu-auto-reply` | 75 | 15 | App de marketplace con UI automation (Playwright) |
+| `MODSetter/SurfSense` | 60 | 15 | Backend de indexación (Airtable, Slack, Discord, etc.) |
+| `pmh1314520/WebRPA` | 65 | 15 | RPA / automatización de browser |
+| `IBM/mcp-context-forge` | 53 | 15 | Gateway MCP empresarial |
+| `MagicStack/asyncpg` | 1 | 1 | Driver PostgreSQL (DB-level) |
+| **Total** | **254** | **61** | |
+
+### Resultado de clasificación manual
+
+| Categoría | N | % | Descripción |
+|-----------|---|---|-------------|
+| **TRUE POSITIVE** | **2** | **3.3%** | Retry genuino de I/O con riesgo de thundering herd |
+| **BORDERLINE** | **1** | **1.6%** | Probe HTTP sobre URLs fallback (sin backoff, pero diferente URL cada vez) |
+| **FALSE POSITIVE — FOREACH** | 25 | 41.0% | `for item in collection: try: ...; except: continue` — no es retry |
+| **FALSE POSITIVE — UI_SELECTOR** | 15 | 24.6% | `for selector in selectors: page.query_selector()` — Playwright |
+| **FALSE POSITIVE — MEM_PARSE** | 10 | 16.4% | `int()`, `json.loads()`, `datetime.fromisoformat()` en bucles |
+| **FALSE POSITIVE — POLL_LOOP** | 4 | 6.6% | `except asyncio.TimeoutError: continue` en polling |
+| **FALSE POSITIVE — BENCHMARK** | 2 | 3.3% | Warmup loops de benchmarks |
+| **FALSE POSITIVE — LOCAL** | 2 | 3.3% | Socket local, desktop UI polling |
+| **Total FP** | **58** | **95.1%** | |
+
+**Tasa de falso positivo en muestra: 95.1%**
+
+### Casos verdaderos positivos encontrados (2/61)
+
+**TP-1** — `xianyu-auto-reply/backend-web/app/api/routes/distribution.py:242`
+```python
+# Retry de DB: genera clave única, reintenta hasta 10 veces si hay conflicto
+for _ in range(10):
+    key = _generate_secret_key()
+    key_owner.secret_key = key
+    try:
+        await session.commit()
+        break
+    except Exception:
+        await session.rollback()
+        key_owner.secret_key = None
+        continue  # ← sin backoff entre intentos
+```
+Patrón genuino: `for _ in range(N)`, variable `_` (unnamed), DB I/O.
+
+**TP-2** — `asyncpg/tests/test_connect.py:236`
+```python
+# Retry de conexión en Windows (3 intentos, sin backoff)
+for tried in range(3):
+    try:
+        return await self.connect(**kwargs)
+    except asyncpg.ConnectionDoesNotExistError:
+        pass  # ← sin delay entre intentos
+```
+Patrón genuino: `for variable in range(N)`, red I/O. (En tests, contexto Windows-specific.)
+
+### El patrón dominante de falso positivo
+
+El 65.6% de los FPs responden a la misma estructura: **for-each con manejo de errores**,
+no retry:
+
+```python
+# PATRÓN DETECTADO (FP) — for-each sobre colección:
+for item in collection:        # ← variable semántica, no contador
+    try:
+        process(item)
+    except Exception:
+        continue               # ← "saltar este ítem", no "reintentar"
+```
+
+```python
+# PATRÓN OBJETIVO (TP) — retry con contador:
+for _ in range(N):             # ← _ o attempt, iterable es range()
+    try:
+        await network_call()
+    except Exception:
+        continue               # ← "reintentar la misma operación"
+```
+
+La distinción es observable en el AST: si el iterable del `for` es una llamada a
+`range()`, es probable retry. Si es un nombre de variable o atributo (colección),
+es probable for-each.
+
+### Ejemplos reales de falso positivo por subcategoría
+
+**FOREACH** — `SurfSense/connector_indexers/airtable_indexer.py:428`
+```python
+# Indexa registros de Airtable: for-each, no retry del mismo registro
+for record in airtable_records:
+    try:
+        doc = await build_document(record)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Error processing record: {e}")
+        continue  # ← pasar al siguiente registro
+```
+
+**UI_SELECTOR** — `xianyu-auto-reply/services/xianyu_publisher.py:433`
+```python
+# Itera selectores CSS probando cuál existe en el DOM
+for selector in add_image_selectors:
+    try:
+        add_image_button = await self.page.wait_for_selector(selector, timeout=3000)
+        if add_image_button:
+            break
+    except Exception:
+        continue  # ← "ese selector no existe, prueba el siguiente"
+```
+
+**MEM_PARSE** — `xianyu-auto-reply/services/listing_monitor_service.py:696`
+```python
+# Parseo de IDs: convierte strings a int, salta los inválidos
+for raw_id in task_ids:
+    try:
+        task_id = int(raw_id)
+    except (TypeError, ValueError):
+        continue  # ← parseo en memoria, sin I/O de red
+```
+
+**POLL_LOOP** — `mcp-context-forge/mcpgateway/services/event_service.py:232`
+```python
+# Polling de pub/sub: TimeoutError significa "no hay mensaje aún"
+while True:
+    try:
+        message = await asyncio.wait_for(
+            pubsub.get_message(ignore_subscribe_messages=True, timeout=poll_timeout),
+            timeout=poll_timeout + 0.5,
+        )
+    except asyncio.TimeoutError:
+        continue  # ← timeout esperado, no retry de operación fallida
+```
+
+### Diagnóstico raíz del problema
+
+La regla usa `_ends_with_retry()` para detectar `continue`/`pass` en cualquier
+`except` dentro de cualquier bucle. Esto no distingue entre:
+
+1. **Retry loop**: la misma operación se reintenta → riesgo real de thundering herd
+2. **For-each**: se procesa el siguiente elemento → sin riesgo de thundering herd
+3. **Polling loop con timeout esperado**: el `continue` es control flow normal
+
+El criterio actual captura patrones de aspecto similar pero semántica radicalmente
+diferente.
+
+### Recomendación sobre refinamiento del detector
+
+**La tasa de FP (95%) supera ampliamente el umbral de 10-15%. Se recomienda
+refinamiento del detector.**
+
+El cambio con mayor impacto (estimado ~80% reducción de FPs) es distinguir
+`for item in collection` de `for _ in range(N)`:
+
+```python
+# Añadir a RetryNoBackoffRule — check antes de procesar el loop
+def _is_retry_loop(loop_node: ast.AST) -> bool:
+    """True si el loop parece retry, no for-each."""
+    if isinstance(loop_node, ast.While):
+        return True  # while loops son candidatos a retry
+    if isinstance(loop_node, ast.For):
+        # Solo flagear si itera sobre range() — no sobre colecciones semánticas
+        iter_node = loop_node.iter
+        return (
+            isinstance(iter_node, ast.Call)
+            and isinstance(iter_node.func, ast.Name)
+            and iter_node.func.id == 'range'
+        )
+    return False
+```
+
+Refinamientos adicionales de menor impacto:
+- Excluir `except asyncio.TimeoutError: continue` en `while` loops (POLL_LOOP FP)
+- Añadir PYVIBE-019 a TEST_FILE_DOWNGRADE (el hit de asyncpg está en tests/)
+
+**Impacto estimado si se aplica solo el check de `range()`:**
+- Eliminaría: FOREACH (41.0%) + UI_SELECTOR (24.6%) = 65.6% de hits actuales
+- Dejaría: TP genuinos + POLL_LOOP + MEM_PARSE + algunos BENCHMARK
+- TP rate estimado post-refinamiento: ~20-30% de los hits restantes
+
+**Esta sección es investigación/recomendación. No se implementa ningún cambio de
+código aquí — el refinamiento requiere decisión de diseño y regresión de tests.**
+
+---
+
 ## Nota sobre home-assistant/core (73 hits)
 
 home-assistant/core es un proyecto de producción con millones de usuarios y revisión
-técnica estricta. Sus 73 hits pueden incluir mezcla de:
-- True positives: retries de integración con APIs de dispositivos IoT sin backoff
-- Potential FPs: retries de parsing de mensajes de protocolo (Categoría A del Paso 5)
+técnica estricta. Sus 73 hits probablemente incluyen mezcla similar a la muestra:
+- Probable mayoría FP: retries de parsing de mensajes de protocolo, for-each sobre
+  dispositivos/integraciones (patrón FOREACH), iteración sobre configuraciones
+- Probable minoría TP: retries de conexión a APIs de dispositivos IoT (ej: Zigbee,
+  Z-Wave, MQTT) sin backoff
 
 No se realizó análisis de código fuente directo en home-assistant para clasificar
-los hits individuales. La presencia del repo confirma que el patrón existe en producción
-seria, pero no implica que todos sus hits sean igualmente problemáticos.
+los hits individuales (repo demasiado grande para clonar en análisis). Dada la tasa
+de FP del 95% en la muestra, estimar ~3-7 TPs reales de los 73 hits parece razonable.
 
 ---
 
