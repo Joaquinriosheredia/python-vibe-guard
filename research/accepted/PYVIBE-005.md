@@ -238,6 +238,49 @@ Confidence:
 
 ---
 
+## Decisión técnica — punto ciego de configuración global
+
+**Fecha:** 2026-06-21  
+**Pregunta:** ¿es detectable con AST puro si el proyecto tiene `task_time_limit` configurado globalmente, haciendo redundante el per-task limit?
+
+### Formas en que puede existir configuración global
+
+| Forma | Ejemplo | Detectable con AST |
+|-------|---------|-------------------|
+| Asignación en `celeryconfig.py` | `task_time_limit = 3600` | Solo si mismo archivo (raro) |
+| Atributo `app.conf` | `app.conf.task_time_limit = 3600` | Solo si mismo archivo |
+| Método `app.conf.update` | `app.conf.update(task_time_limit=3600)` | Solo si mismo archivo |
+| Settings Django | `CELERY_TASK_TIME_LIMIT = 3600` en `settings.py` | Diferente archivo → no |
+| Argumento CLI | `celery worker --time-limit=3600` | No (no es Python source) |
+| Variable de entorno | `CELERY_TASK_TIME_LIMIT=3600` | No (no es Python source) |
+
+### Por qué no se implementa detección
+
+**El analyzer opera file-by-file.** `analyze_source(source, filepath)` recibe un único archivo y produce violaciones para ese archivo. La regla `CeleryTaskTimeLimitRule` solo ve el AST del archivo actual.
+
+La configuración global de Celery vive casi siempre en archivos separados (`celeryconfig.py`, `settings.py`, inicialización de la app) — raramente en el mismo archivo que las definiciones de tasks.
+
+Opciones evaluadas:
+
+- **Detección in-file:** alta precisión para el mismo archivo, recall < 5% (prácticamente inútil — la configuración y las tasks coexisten en el mismo archivo en casos marginales).
+- **Detección cross-file en `analyze_directory`:** requiere pre-scan de todos los archivos del proyecto, añadir contexto de proyecto al sistema de reglas, y manejar múltiples patrones de configuración. Complejidad arquitectónica desproporcionada al beneficio; además cubre 0% los casos CLI/env-var.
+
+**Decisión: Opción B — documentar la limitación.** No cambiar el comportamiento de la regla.
+
+### Qué se documentó
+
+1. **Docstring de `celery_time_limit.py`** — sección "Known limitation" explica el punto ciego y la recomendación (`# noqa: PYVIBE-005` o añadir per-task limits).
+2. **README.md** — severity note para PYVIBE-005 advierte a usuarios con configuración global.
+3. **Este archivo** — decisión técnica documentada con razonamiento.
+
+### Recomendación para usuarios afectados
+
+Si tu proyecto tiene `task_time_limit` configurado globalmente y recibes warnings innecesarios, dos opciones:
+- **Preferida:** añade `soft_time_limit` y `time_limit` per-task (autodocumenta expectativas de tiempo, inmune a drift de configuración)
+- **Supresión:** usa `# noqa: PYVIBE-005` en los tasks cubiertos por configuración global
+
+---
+
 ## Fuentes verificadas
 
 - [Celery Tasks docs — "A task that blocks indefinitely may eventually stop the worker"](https://docs.celeryq.dev/en/stable/userguide/tasks.html)
