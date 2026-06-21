@@ -83,9 +83,13 @@ def analyze_source(
     except SyntaxError:
         return []
 
+    source_lines = source.splitlines()
     violations = []
     for RuleClass in ALL_RULES:
-        visitor = RuleClass()
+        if RuleClass is SilentExceptRule:
+            visitor = RuleClass(source_lines)
+        else:
+            visitor = RuleClass()
         visitor.visit(tree)
         violations.extend(visitor.violations)
 

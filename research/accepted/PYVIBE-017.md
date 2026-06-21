@@ -2,7 +2,8 @@
 
 **Severidad:** CRITICAL (WARNING para supresión intencional con log)  
 **Archivo:** `pyvibe/rules/silent_except.py`  
-**Patrón:** bloque `except` vacío o con solo `pass`/`...` en `async def`, sin log ni re-raise
+**Patrón:** bloque `except` vacío o con solo `pass`/`...` en `async def`, sin log ni re-raise  
+**Suppression:** `# nosec B110` en la misma línea del `except` — supresión autorizada (convención Bandit)
 
 ---
 
@@ -290,14 +291,18 @@ Cada hit fue clasificado con tres señales extraídas del AST + contexto textual
 
 ### Patrón del outlier IBM
 
-IBM/mcp-context-forge usa `# nosec B110` en todos sus handlers MCP para suprimir el aviso de Bandit de forma intencional y documentada. Esto es una suppressión deliberada con anotación de seguridad, no un FP de PYVIBE-017 — la regla lo detecta correctamente como "patrón silenciador", pero el equipo ha decidido suprimirlo explícitamente. Un detector maduro debería honrar `# nosec B110` como supresión autorizada.
+IBM/mcp-context-forge usa `# nosec B110` en todos sus handlers MCP para suprimir el aviso de Bandit de forma intencional y documentada. Esto es una supresión deliberada con anotación de seguridad. **A partir de v0.7.1, PYVIBE-017 honra `# nosec B110` como supresión autorizada** — estos 102 hits ya no se reportan.
 
 ### Veredicto de la auditoría
 
 - **92.2% de hits son bugs genuinos** sin ningún contexto mitigante.
 - La tasa de FP "orgánicos" (cleanup + non-fatal) es **~4.2%** fuera del outlier IBM.
-- El 3.7% de `# nosec B110` no es un FP del detector — es una supresión intencional que el detector podría respetar con un flag de configuración.
-- **La regla es precisa.** La severidad CRITICAL está justificada para el 92.2% de casos.
+- El 3.7% de `# nosec B110` es supresión intencional. **Desde v0.7.1 se honra como opt-out autorizado.**
+- **La regla es precisa.** La severidad CRITICAL está justificada para los casos sin supresión explícita.
+
+### Decisión de diseño: `# nosec` vs `# nosec B110`
+
+Solo `# nosec B110` (con el código específico) suprime PYVIBE-017. Un `# nosec` genérico sin B110 **no suprime** la regla. Razón: `# nosec` sin código estaba dirigido originalmente a Bandit; PYVIBE-017 es un detector independiente. Requerir el código explícito garantiza que el opt-out sea intencional para este patrón concreto.
 
 ---
 

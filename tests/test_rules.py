@@ -1108,6 +1108,63 @@ def handler():
     assert not any(v.rule_id == "PYVIBE-017" for v in violations)
 
 
+def test_017_nosec_b110_suppresses_exception_pass():
+    # # nosec B110 on the except line = intentional suppression, must not flag
+    src = """
+async def shutdown():
+    try:
+        await conn.close()
+    except Exception:  # nosec B110
+        pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_without_nosec_still_flagged():
+    # Regression: identical pattern without # nosec B110 must still be detected
+    src = """
+async def shutdown():
+    try:
+        await conn.close()
+    except Exception:
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "WARNING"
+
+
+def test_017_nosec_without_b110_is_not_suppressed():
+    # # nosec alone (no B110 code) does NOT suppress PYVIBE-017.
+    # Rationale: generic # nosec targets Bandit rules; PYVIBE-017 is a separate
+    # detector and requires the specific B110 code for an explicit opt-out.
+    src = """
+async def handler():
+    try:
+        await risky()
+    except Exception:  # nosec
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+
+
+def test_017_nosec_b110_suppresses_bare_except():
+    # # nosec B110 also suppresses bare except (same convention)
+    src = """
+def cleanup():
+    try:
+        resource.close()
+    except:  # nosec B110
+        pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
 # ─── PYVIBE-018: while True without await ────────────────────────────────────
 
 def test_018_detects_while_true_no_await():
