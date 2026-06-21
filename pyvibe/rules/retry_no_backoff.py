@@ -15,6 +15,21 @@ def _ends_with_retry(body: list) -> bool:
     return False
 
 
+def _is_retry_loop(node: ast.For) -> bool:
+    """True if the for loop iterates over range() — likely a retry, not a for-each.
+
+    A `for item in collection` loop that catches exceptions and uses continue is
+    "skip this item", not "retry the same operation". Only `for x in range(N)` has
+    retry semantics because range() produces a bounded count of attempts.
+    While loops are handled separately (always retry-like by construction).
+    """
+    return (
+        isinstance(node.iter, ast.Call)
+        and isinstance(node.iter.func, ast.Name)
+        and node.iter.func.id == "range"
+    )
+
+
 def _is_sleep_call(func_node) -> bool:
     """True if func_node is asyncio.sleep or time.sleep."""
     if isinstance(func_node, ast.Attribute):
@@ -82,39 +97,46 @@ class RetryNoBackoffRule(ast.NodeVisitor):
     def __init__(self):
         self.violations: List[Violation] = []
         self._current_async_func: Optional[str] = None
-        self._in_loop_depth: int = 0
+        # Stack of booleans: True = enclosing loop is a retry loop (while or for range()).
+        # The innermost value determines whether a try/except fires — because `continue`
+        # in the except resumes the *innermost* loop, not any outer loop.
+        self._retry_loop_stack: List[bool] = []
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         prev_func = self._current_async_func
-        prev_depth = self._in_loop_depth
+        prev_stack = self._retry_loop_stack
         self._current_async_func = node.name
-        self._in_loop_depth = 0  # reset: loops inside this function are tracked fresh
+        self._retry_loop_stack = []
         self.generic_visit(node)
         self._current_async_func = prev_func
-        self._in_loop_depth = prev_depth
+        self._retry_loop_stack = prev_stack
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         # Sync functions are out of scope; reset state so nested sync defs don't fire
         prev_func = self._current_async_func
-        prev_depth = self._in_loop_depth
+        prev_stack = self._retry_loop_stack
         self._current_async_func = None
-        self._in_loop_depth = 0
+        self._retry_loop_stack = []
         self.generic_visit(node)
         self._current_async_func = prev_func
-        self._in_loop_depth = prev_depth
+        self._retry_loop_stack = prev_stack
 
     def visit_For(self, node: ast.For):
-        self._in_loop_depth += 1
+        # Only fire when iterating over range() — for-each over collections is not retry.
+        self._retry_loop_stack.append(_is_retry_loop(node))
         self.generic_visit(node)
-        self._in_loop_depth -= 1
+        self._retry_loop_stack.pop()
 
     def visit_While(self, node: ast.While):
-        self._in_loop_depth += 1
+        # while loops are inherently retry-like (no per-item semantics).
+        self._retry_loop_stack.append(True)
         self.generic_visit(node)
-        self._in_loop_depth -= 1
+        self._retry_loop_stack.pop()
 
     def visit_Try(self, node: ast.Try):
-        if self._current_async_func and self._in_loop_depth > 0:
+        if (self._current_async_func
+                and self._retry_loop_stack
+                and self._retry_loop_stack[-1]):
             for handler in node.handlers:
                 self._check_handler(handler)
         self.generic_visit(node)

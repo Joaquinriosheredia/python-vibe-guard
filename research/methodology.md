@@ -36,6 +36,26 @@ candidates/PYVIBE-XXX.md
   → actualizar aggregate.json en siguiente sweep
 ```
 
+## Auditoría de falsos positivos
+
+Cualquier regla cuya auditoría manual de muestra revele >20% de falsos positivos estructurales
+entra automáticamente en estado **"Needs Redesign"**. No se considera estable ni se mantiene
+en producción sin advertencia hasta que una nueva heurística reduzca esa tasa por debajo del
+umbral, verificado con una nueva auditoría de muestra.
+
+El umbral del 20% refleja que una tasa superior implica que el detector genera más ruido que
+señal: los desarrolladores aprenden a ignorarlo, erosionando la confianza en todas las reglas.
+
+**Proceso:**
+```
+regla activa
+  → auditoría manual de muestra (mín. 30 hits estratificados por repo)
+  → si FP rate > 20% → estado "Needs Redesign"
+  → diseñar heurística que elimine la categoría dominante de FP
+  → implementar + nueva auditoría de muestra
+  → si FP rate ≤ 20% → volver a estado "Estable"
+```
+
 ## Proceso de rechazo
 
 ```

@@ -1,5 +1,13 @@
 # PYVIBE-019 — Retry sin backoff
 
+> **⚠️ Estado: Needs Redesign**  
+> Auditoría manual de 61 hits (jun 2026) reveló 95.1% de falsos positivos estructurales —
+> supera el umbral del 20% definido en `research/methodology.md`.  
+> El detector no distingue `for item in collection: except: continue` (for-each) de
+> `for _ in range(N): except: continue` (retry genuino). Refinamiento activo: añadir
+> `_is_retry_loop()` que restringe `for` loops a iterables `range(...)`.
+> Ver sección "Auditoría de Falsos Positivos" y "Validación post-fix" en este documento.
+
 **Severidad:** WARNING  
 **Archivo:** `pyvibe/rules/retry_no_backoff.py`  
 **Patrón:** bucle de retry (`for`/`while` con `except` + `continue`/`pass`) en `async def`
@@ -9,12 +17,12 @@ sin `await asyncio.sleep(...)` ni llamada a backoff/jitter entre intentos
 
 ## Datos objetivos
 
-| Métrica | 100 repos | 250 repos |
-|---------|-----------|-----------|
-| Repos afectados | 43/100 (43.0%) | 82/250 (32.8%) |
-| Total hits | 408 | 760 |
-| Estabilidad 100→250 | **Media** (−10.2 pp) | |
-| FP documentados (sweep) | 0 reportados | ~95% en muestra manual (ver Auditoría FP) |
+| Métrica | 100 repos | 250 repos (pre-fix) | 250 repos (post-fix) |
+|---------|-----------|---------------------|----------------------|
+| Repos afectados | 43/100 (43.0%) | 82/250 (32.8%) | 55/250 (22.0%) |
+| Total hits | 408 | 760 | 214 |
+| Estabilidad | **Media** (−10.2 pp) | — | −71.8% vs pre-fix |
+| FP documentados (sweep) | 0 reportados | ~95% (muestra 61 hits) | ~84% (muestra 25 hits) |
 
 ## Repos representativos (sweep 250)
 
@@ -566,3 +574,63 @@ de FP del 95% en la muestra, estimar ~3-7 TPs reales de los 73 hits parece razon
   no verificado con fetch directo)
 - URL original del postmortem de Discord thundering herd (citado en análisis de
   postmortems, no verificado con fetch directo)
+
+---
+
+## Validación post-fix — `_is_retry_loop()` (jun 2026)
+
+**Fix implementado:** `_is_retry_loop()` en `pyvibe/rules/retry_no_backoff.py` restringe
+la detección de `for` loops a iterables `range(...)`. Bucles `for item in collection`
+ya no disparan el detector.
+
+### Comparativa de cobertura
+
+| Métrica | Pre-fix | Post-fix | Δ |
+|---------|---------|----------|---|
+| Total hits | 760 | 214 | −546 (−71.8%) |
+| Repos afectados | 82/250 (32.8%) | 55/250 (22.0%) | −27 repos |
+
+### Auditoría de muestra post-fix (25 hits estratificados)
+
+Muestra tomada de los 3 repos con más hits (Soju06/codex-lb, CJackHwang/AIstudioProxyAPI,
+pmh1314520/WebRPA, zhinianboke/xianyu-auto-reply).
+
+| Categoría | N | % | Descripción |
+|-----------|---|---|-------------|
+| **TRUE POSITIVE** | **4** | **16.0%** | `for _ in range(N): except: continue` DB retry (unique key generation) |
+| **FALSE POSITIVE — POLL_LOOP** | 10 | 40.0% | `while ...: asyncio.TimeoutError: continue/pass` tras `wait_for()` |
+| **FALSE POSITIVE — MEM_PARSE** | 4 | 16.0% | `json.JSONDecodeError: continue` en stream/websocket loops |
+| **FALSE POSITIVE — CLEANUP_PASS** | 7 | 28.0% | `except Exception: pass` en bloque nested dentro de while, no retry |
+
+**Tasa FP post-fix en muestra: 84%** (antes: 95.1%)
+
+### Diagnóstico de los FPs restantes
+
+Los 3 subtipos de FP restantes son **todos de `while` loops**, no de `for` loops:
+
+1. **POLL_LOOP** (~40%): `while ...: try: await asyncio.wait_for(..., timeout=T): except asyncio.TimeoutError: continue`
+   → El timeout es comportamiento esperado, no error a reintentar. El `continue` reanuda
+   el polling loop, no reintenta la misma operación fallida.
+
+2. **MEM_PARSE** (~16%): `while True: data = await ws.receive(); try: json.loads(data); except json.JSONDecodeError: continue`
+   → Parsing en memoria. El `continue` salta al siguiente mensaje del stream.
+
+3. **CLEANUP_PASS** (~28%): `except Exception: pass` en try blocks nested dentro de while
+   → El `pass` no es retry — es supresión silenciosa de errores en cleanup. El while
+   loop continúa por caída natural, no por `continue`.
+
+### Impacto neto del fix
+
+La categoría dominante de FP en la auditoría original era **FOREACH** (for-each, 41%) +
+**UI_SELECTOR** (24.6%) — ambas eran `for item in collection`. Ambas categorías están
+**completamente eliminadas** por `_is_retry_loop()`.
+
+Los FPs restantes son inherentes a la detección de `while` loops, que el usuario del
+proyecto ha decidido mantener en scope por su naturaleza retry-like. Para eliminar
+POLL_LOOP FPs se requeriría un check adicional: `except asyncio.TimeoutError` en un
+`while` con `await asyncio.wait_for(...)` es poll, no retry — pero ese refinamiento
+se deja para una iteración futura.
+
+**TP rate estimado mejoró: ~5% (pre-fix) → ~16% (post-fix).** Reducción total de 71.8%.
+El estado sigue siendo "Needs Redesign" hasta que una nueva auditoría de muestra confirme
+tasa de FP ≤ 20% en el universo completo (requiere también atacar los while-loop FPs).

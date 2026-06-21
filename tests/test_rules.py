@@ -1432,6 +1432,86 @@ async def call_api():
     assert not any(v.rule_id == "PYVIBE-019" for v in violations)
 
 
+def test_019_no_false_positive_foreach_collection():
+    # for item in collection: except: continue is "skip this item", not retry
+    src = """
+async def process_records(records):
+    for record in records:
+        try:
+            await save(record)
+        except Exception:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_foreach_variable_iterable():
+    # Iterating over a named variable — for-each, not retry
+    src = """
+async def index_documents(docs):
+    for doc in docs:
+        try:
+            result = await client.index(doc)
+        except Exception as e:
+            logger.error(e)
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_foreach_ui_selectors():
+    # UI selector probing (dominant FP category from FP audit: UI_SELECTOR)
+    src = """
+async def find_button(page):
+    selectors = ["#btn-submit", ".submit-btn", "button[type=submit]"]
+    for selector in selectors:
+        try:
+            el = await page.wait_for_selector(selector, timeout=2000)
+            if el:
+                return el
+        except Exception:
+            continue
+    return None
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_foreach_outer_range_inner_collection_no_fire():
+    # The innermost loop is a for-each, so continue in except is NOT a retry.
+    # The outer range() loop is irrelevant to what `continue` resumes.
+    src = """
+async def batch_retry(items):
+    for attempt in range(3):
+        for item in items:
+            try:
+                await process(item)
+            except Exception:
+                continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_detects_range_inside_foreach():
+    # Inner loop is range() — the continue IS a retry. Should fire.
+    src = """
+async def fetch_all(urls):
+    for url in urls:
+        for attempt in range(3):
+            try:
+                await client.get(url)
+                break
+            except Exception:
+                continue
+"""
+    violations = analyze_source(src)
+    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
+    assert len(v019) == 1
+
+
 # ─── PYVIBE-020: put_nowait() without QueueFull handler ──────────────────────
 
 def test_020_detects_put_nowait_in_async_def():
