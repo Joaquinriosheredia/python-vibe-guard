@@ -376,6 +376,32 @@ async def async_read():
     assert len(violations) == 0
 
 
+def test_009_downgraded_to_warning_in_test_file():
+    src = """
+import json
+async def async_setup():
+    with open("fixture.json") as f:
+        return json.load(f)
+"""
+    violations = analyze_source(src, "tests/conftest.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-009"
+    assert violations[0].severity == "WARNING"
+
+
+def test_009_still_critical_in_production_file():
+    src = """
+import json
+async def read_config():
+    with open("config.json") as f:
+        return json.load(f)
+"""
+    violations = analyze_source(src, "app/handlers.py")
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-009"
+    assert violations[0].severity == "CRITICAL"
+
+
 # ─── PYVIBE-011 ──────────────────────────────────────────────────────────────
 
 def test_011_detects_os_system_in_async():
