@@ -698,3 +698,182 @@ próxima iteración del protocolo de Evidence Review.
 **TP rate con POLL_LOOP fix: ~12% en Scan v3** (sin mejora neta respecto al 16% previo
 porque el POLL_LOOP fix eliminó hits FP y los TPs son constantes).
 El estado permanece "Needs Redesign" hasta tasa de FP ≤ 20%.
+
+---
+
+## Análisis profundo CLEANUP_PASS — pre-decisión de scope (jun 2026)
+
+### Metodología
+
+Scan fresco sobre los 250 repos clonados con el código actual (post-POLL_LOOP fix).
+Total: **186 hits, 48 repos**. Clasificación AST completa de todos los hits.
+
+### Hallazgo 1: descomposición por tipo de loop × tipo de handler
+
+| Categoría | N | % | Descripción |
+|-----------|---|---|-------------|
+| `while` + `[pass]` | 77 | 41.4% | `except: pass` como único statement en while — TODOS FP |
+| `while` + `continue` | 59 | 31.7% | `except ...: ...; continue` en while — mixto |
+| `for range()` + `continue` | 30 | 16.1% | `except ...: ...; continue` en for range — mixto |
+| `for range()` + `[pass]` | 20 | 10.8% | `except: pass` como único statement en for range — TODOS FP |
+
+**Consecuencia directa**: 97 de 186 hits (52.2%) son `[pass]` como único statement.
+Estos son **todos falsos positivos** sin excepción: `pass` solo no indica retry explícito;
+el loop continúa por caída natural, no por intención de reintentar.
+
+### Hallazgo 2: confirmación y refutación de la hipótesis
+
+**Hipótesis original**: "el `except: pass` está siempre en un try anidado DENTRO del while,
+mientras el `continue`/retry real está en el nivel del while externo".
+
+**Resultado**: PARCIALMENTE CONFIRMADA, pero el mecanismo correcto es más simple.
+
+La hipótesis asume que el `continue` en el while es el marcador relevante. Pero en el 100%
+de los CLEANUP_PASS hits, el handler body es **`[pass]`** — no hay `continue` en ningún
+nivel. El while continúa por caída natural (`pass` → end of except → next iteration), no
+por `continue` explícito. La nesting depth del try dentro del while es irrelevante.
+
+**Cuatro ejemplos reales que confirman el patrón:**
+
+**Ejemplo A** — `browser.py:83` (xhs_ai_publisher):
+```python
+while True:   # outer retry loop
+    ...
+    if self.poster:
+        try:
+            await self.poster.close(force=True)  # cleanup
+        except Exception:   # ← FLAGGED
+            pass             # ← sole statement, no continue
+        self.poster = None
+    # main operation follows
+```
+El `pass` silencia el error de cleanup. El `while` continúa solo porque es `while True`.
+
+**Ejemplo B** — `queue_worker.py:348` (AIstudioProxyAPI):
+```python
+while True:
+    ...
+    if client_disconnected_early:
+        if submit_btn_loc:
+            try:
+                await submit_btn_loc.click(timeout=5000)
+            except Exception:   # ← FLAGGED
+                pass             # ← no retry intent
+```
+UI cleanup post-stream. El `pass` ignora fallos en un intento de UI; no es retry.
+
+**Ejemplo C** — `stream.py:136` (AIstudioProxyAPI):
+```python
+while True:  # streaming loop
+    ...
+    try:
+        await page.evaluate("...scroll JS...", [...])
+    except Exception:   # ← FLAGGED
+        pass             # ← scroll failures silenced
+    if GlobalState.IS_QUOTA_EXCEEDED: ...
+```
+El JS de scroll es accesorio. `pass` ignora fallos; la iteración continúa.
+
+**Ejemplo D** — `input.py:108` (AIstudioProxyAPI):
+```python
+while True:  # polling loop
+    try:
+        if await submit_button.is_enabled(timeout=500):
+            break
+    except Exception:   # ← FLAGGED
+        pass             # ← sole statement, then loop continues with sleep(0.5)
+    await asyncio.sleep(0.5)
+```
+Polling con backoff en el loop body (no en el except). El `pass` silencia errores de UI.
+Este hit también tiene backoff (`await asyncio.sleep(0.5)`) en el loop body, invisible
+para `_body_has_backoff()` que solo mira el handler body.
+
+### Hallazgo 3: evaluación del gate propuesto
+
+**Gate propuesto**: "Solo flaggear si el `continue`/retry está en el MISMO nivel de
+anidación que el `try/except` — no si hay un try anidado de cleanup entre medias"
+
+**Resultado**: NO ES EFECTIVO para el problema dominante.
+
+El gate de nesting level apuntaría a los `while_continue` FPs donde el try está anidado.
+Pero el 52.2% de todos los hits son `[pass]`-only y el gate de nesting no los toca
+(no tienen `continue` en ningún nivel).
+
+El gate que SÍ funciona: **eliminar `[pass]` como único statement de `_ends_with_retry()`**.
+
+### Hallazgo 4: estimación de reducción de FP con distintos gates
+
+| Gate | Hits restantes | FP rate est. | Mejora |
+|------|----------------|--------------|--------|
+| Baseline (actual) | 186 | 88% | — |
+| Eliminar `[pass]` only | 89 | ~55% | −97 hits |
+| Solo `for range()` | 50 | ~55% | −136 hits |
+| Solo `for range()` + no `[pass]` | 30 | ~45-50% | −156 hits |
+| Solo `for _ in range(N)` + no `[pass]` | 12 | ~40-45% | −174 hits |
+
+**Ningún gate individual alcanza el objetivo de ≤ 30-40% FP.**
+
+La causa raíz es que incluso en el mejor segmento (`for _ in range(N) + continue`, 12 hits)
+persisten dos FP estructurales:
+
+1. **MISSED_BACKOFF**: código con `sleep(N)` (import directo, sin `asyncio.`) o
+   `await backoff.asleep()` (método Backoff class) que `_body_has_backoff()` no detecta:
+   - `wassim249/evaluator.py`: `sleep(SLEEP_TIME); continue` → FP
+   - `aiogram/dispatcher.py`: `await backoff.asleep(); continue` → FP
+
+2. **RANGE_FOREACH_SCAN**: `for _ in range(count)` donde `count` es el número de elementos,
+   no un límite de reintentos. No distinguible sin semántica del dominio:
+   - `test_translate.py`: `for _ in range(10): try: s.bind(port); except OSError: continue`
+     → TP-borderline (test code, bajo riesgo)
+
+### Hallazgo 5: análisis del grupo `while + continue` (59 hits)
+
+Distribución por tipo de excepción:
+
+| Tipo excepción | N | Clasificación |
+|----------------|---|---------------|
+| `Exception` (bare) | 19 | AMBIGUO — requiere inspección manual |
+| `json.JSONDecodeError` | 7 | FP (MEM_PARSE) |
+| `ProxyResponseError` | 4 | TP-candidato (retry de proxy) |
+| `TimeoutError` | 3 | AMBIGUO (puede ser poll o retry) |
+| `ValueError`, `(Empty, ValueError)` | 4 | FP (parse) |
+| `Errors.KafkaError` | 2 | TP-candidato (Kafka consumer retry) |
+| Otros específicos | 20 | mixto |
+
+Estimado: ~25-30% TP en el grupo `while_continue`. La mayoría de FPs son MEM_PARSE (parse
+de mensajes en stream) y bare Exception (donde el código tiene backoff no detectado).
+
+### Conclusión: caso para restricción de scope
+
+Los while loops presentan una tasa de FP estructuralmente alta que **no es reducible a
+≤ 40% con gates AST** sin introducir complejidad desproporcionada, por tres razones:
+
+1. **Pass-only FPs** (41.4% del total): `except: pass` en while siempre ambiguo — es
+   cleanup silencioso, no retry. El loop continúa por caída natural.
+
+2. **MEM_PARSE sistémico** (≥ 12% del total): `while True: data = recv(); try: parse(data);
+   except ParseError: continue` — el detector no puede distinguir "reintentar parse" de
+   "saltar mensaje malformado" sin semántica de red vs. memoria.
+
+3. **MISSED_BACKOFF** (% desconocido): `while + except: sleep(N); continue` o
+   `while + except: await backoff.asleep(); continue` — backoff presente pero invisible
+   para `_body_has_backoff()` que solo reconoce `asyncio.sleep` y `time.sleep` con prefijo.
+
+**Alternativa más simple**: restringir PYVIBE-019 a `for range()` loops únicamente y
+documentar `while` como out-of-scope explícitamente. Resultado:
+- 50 hits restantes (de 186 → −73%)
+- FP rate: ~55% aún (RANGE_FOREACH_SCAN + BULK_CHUNK_SKIP dominan)
+- Pero la categoría CLEANUP_PASS (la más confusa) queda completamente eliminada
+- Opción de siguiente paso: filtrar también `for i in range(N)` (var≠`_`) → 12 hits,
+  ~40% FP — primer umbral manejable
+
+**Decisión pendiente (no implementada):**
+La evidencia de este análisis soporta dos opciones mutuamente excluyentes:
+
+- **Opción A** (restricción gradual): Eliminar `[pass]` + mantener while → 89 hits, 55% FP
+- **Opción B** (restricción de scope): Eliminar while, mantener solo `for range()` → 50 hits, 55% FP
+- **Opción C** (nuclear): `for _ in range(N)` + `continue` solamente → 12 hits, ~40% FP
+
+La elección entre A, B, y C depende del objetivo de calidad vs. cobertura del proyecto.
+El análisis recomienda Opción C como baseline robusto, con mejora de `_body_has_backoff()`
+para cubrir `sleep(N)` y `*.asleep()` como siguiente paso.
