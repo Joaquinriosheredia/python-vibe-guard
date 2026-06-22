@@ -74,6 +74,48 @@ def _body_has_escalation(stmts: list) -> bool:
     return False
 
 
+def _is_timeout_only_handler(handler: ast.ExceptHandler) -> bool:
+    """True if the handler catches ONLY asyncio.TimeoutError or bare TimeoutError.
+
+    Handlers that catch TimeoutError exclusively are very likely polling loops
+    (e.g. `await asyncio.wait_for(event.wait(), timeout=N)`) rather than retries.
+    Tuple handlers like `except (asyncio.TimeoutError, ConnectionError)` return False
+    because the presence of other exception types indicates genuine error handling.
+    """
+    typ = handler.type
+    if typ is None:
+        return False
+    if isinstance(typ, ast.Name) and typ.id == "TimeoutError":
+        return True
+    return (
+        isinstance(typ, ast.Attribute)
+        and typ.attr == "TimeoutError"
+        and isinstance(typ.value, ast.Name)
+        and typ.value.id == "asyncio"
+    )
+
+
+def _try_body_has_timeout_kwarg(stmts: list) -> bool:
+    """True if any call in the try body uses a 'timeout' keyword argument.
+
+    Combined with _is_timeout_only_handler, this identifies the POLL_LOOP pattern:
+        try:
+            await asyncio.wait_for(event.wait(), timeout=N)  ← timeout= here
+        except asyncio.TimeoutError:                          ← TimeoutError only
+            continue                                          ← not a retry
+
+    A genuine network retry would either catch Exception (not TimeoutError only)
+    or would catch asyncio.TimeoutError without any explicit timeout= in the try body.
+    """
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Call):
+                for kw in node.keywords:
+                    if kw.arg == "timeout":
+                        return True
+    return False
+
+
 class RetryNoBackoffRule(ast.NodeVisitor):
     """
     PYVIBE-019 — retry loop without backoff inside async def
@@ -138,16 +180,20 @@ class RetryNoBackoffRule(ast.NodeVisitor):
                 and self._retry_loop_stack
                 and self._retry_loop_stack[-1]):
             for handler in node.handlers:
-                self._check_handler(handler)
+                self._check_handler(handler, node.body)
         self.generic_visit(node)
 
-    def _check_handler(self, handler: ast.ExceptHandler):
+    def _check_handler(self, handler: ast.ExceptHandler, try_body: list):
         body = handler.body
         if not _ends_with_retry(body):
             return
         if _body_has_backoff(body):
             return
         if _body_has_escalation(body):
+            return
+        # POLL_LOOP exclusion: `except asyncio.TimeoutError` + `timeout=` kwarg in try
+        # body is the canonical asyncio.wait_for polling pattern — not a retry.
+        if _is_timeout_only_handler(handler) and _try_body_has_timeout_kwarg(try_body):
             return
         self.violations.append(Violation(
             rule_id=self.RULE_ID,

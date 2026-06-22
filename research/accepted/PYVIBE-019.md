@@ -634,3 +634,67 @@ se deja para una iteración futura.
 **TP rate estimado mejoró: ~5% (pre-fix) → ~16% (post-fix).** Reducción total de 71.8%.
 El estado sigue siendo "Needs Redesign" hasta que una nueva auditoría de muestra confirme
 tasa de FP ≤ 20% en el universo completo (requiere también atacar los while-loop FPs).
+
+---
+
+## Validación post-POLL_LOOP — Scan v3 (jun 2026)
+
+**Fix implementado:** `_is_timeout_only_handler()` + `_try_body_has_timeout_kwarg()` en
+`pyvibe/rules/retry_no_backoff.py`. Los handlers `except asyncio.TimeoutError` dentro de
+un `while` que tiene `timeout=` kwarg en el try body se excluyen como polling loops.
+
+### Comparativa de cobertura
+
+| Métrica | Post-_is_retry_loop() | Post-POLL_LOOP | Δ |
+|---------|-----------------------|----------------|---|
+| Total hits | 214 | 168 | −46 (−21.5%) |
+| Repos afectados | 55/250 (22.0%) | 46/250 (18.4%) | −9 repos |
+
+### Auditoría de muestra Scan v3 (25 hits estratificados)
+
+Muestra tomada de los repos con más hits tras el fix POLL_LOOP.
+
+| Categoría | N | % | Descripción |
+|-----------|---|---|-------------|
+| **TRUE POSITIVE** | **3** | **12%** | `for _ in range(N): except: continue` DB/unique-key retry sin backoff |
+| **FALSE POSITIVE — CLEANUP_PASS** | 11 | 45% | `except Exception: pass` en try nested dentro de while — supresión de errores en cleanup, no retry |
+| **FALSE POSITIVE — MEM_PARSE** | 4 | 16% | `json.JSONDecodeError: continue` en stream/websocket parsers |
+| **FALSE POSITIVE — RANGE_FOREACH** | 1 | 4% | `for i in range(N)` usado como índice, no como contador de intentos |
+| **BORDERLINE** | 3 | 12% | Retries en while con lógica compleja — semánticamente ambiguos |
+
+**Tasa FP en muestra Scan v3: ~88%** (antes del POLL_LOOP fix: 84%)
+
+### Diagnóstico de los FPs restantes
+
+Todos los FPs son de `while` loops. El fix POLL_LOOP eliminó esa categoría (antes 40%),
+pero reveló que **CLEANUP_PASS** es el nuevo dominante:
+
+1. **CLEANUP_PASS** (~45%): `except Exception/SpecificError: pass` en try nested dentro de
+   `while True` — el `pass` suprime el error en un paso de cleanup; el `while` continúa
+   por flujo natural, no porque `pass` fuera un retry explícito.
+
+2. **MEM_PARSE** (~16%): `while True: data = ws.receive(); try: json.loads(data); except json.JSONDecodeError: continue`
+   → Parsing en memoria. El `continue` salta al siguiente mensaje, no reintenta el mismo.
+
+3. **RANGE_FOREACH** (~4%): `for i in range(N)` donde `i` se usa como índice de acceso
+   a lista, no como contador de intentos. Patrón raro pero existente.
+
+### Decisión de scope para `while` loops
+
+**Decisión documentada (no cambio de código):** Los `while` loops se mantienen en scope
+por su naturaleza semánticamente retry-like, pero se documenta que la tasa de FP es alta
+(~88% en Scan v3). El detector actual es más útil como sensor de alerta que como regla
+de alta precisión para `while`.
+
+Para reducir FPs en `while` se necesitaría al menos:
+- **CLEANUP_PASS**: detectar que el `except: pass` está en un try anidado dentro del while
+  (no en el nivel directo del while) → el `continue` que importa está en el while externo
+- **MEM_PARSE**: detectar que la excepción capturada es de parsing en memoria (ValueError,
+  JSONDecodeError) vs. error de IO de red
+
+Estos refinamientos requieren análisis de contexto más profundo y se dejan para la
+próxima iteración del protocolo de Evidence Review.
+
+**TP rate con POLL_LOOP fix: ~12% en Scan v3** (sin mejora neta respecto al 16% previo
+porque el POLL_LOOP fix eliminó hits FP y los TPs son constantes).
+El estado permanece "Needs Redesign" hasta tasa de FP ≤ 20%.

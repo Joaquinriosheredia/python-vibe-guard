@@ -1512,6 +1512,112 @@ async def fetch_all(urls):
     assert len(v019) == 1
 
 
+def test_019_no_false_positive_poll_loop_asyncio_wait_for():
+    # Classic shutdown-signal polling: asyncio.wait_for + except asyncio.TimeoutError
+    # is a polling pattern, not a retry — the timeout is expected normal behavior.
+    src = """
+import asyncio
+
+async def _run_loop(self):
+    while not self._stop.is_set():
+        try:
+            await asyncio.wait_for(self._stop.wait(), timeout=self.interval_seconds)
+            break
+        except asyncio.TimeoutError:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_poll_loop_queue_get():
+    # Queue polling with timeout: TimeoutError means "no item yet, keep polling".
+    src = """
+import asyncio
+
+async def queue_worker(queue):
+    while True:
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=5.0)
+            process(item)
+        except asyncio.TimeoutError:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_poll_loop_bare_timeout_error():
+    # bare TimeoutError (not asyncio.TimeoutError) — same exclusion applies.
+    src = """
+async def wait_for_event(event):
+    while True:
+        try:
+            await some_lib.wait(event, timeout=10)
+        except TimeoutError:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_detects_while_timeout_error_without_timeout_kwarg():
+    # asyncio.TimeoutError in except, but NO timeout= kwarg in try body.
+    # This looks like a genuine network retry that happens to time out.
+    src = """
+import asyncio
+
+async def retry_on_timeout():
+    while True:
+        try:
+            await client.post(url)
+            break
+        except asyncio.TimeoutError:
+            continue
+"""
+    violations = analyze_source(src)
+    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
+    assert len(v019) == 1
+
+
+def test_019_detects_while_exception_with_timeout_kwarg():
+    # except Exception (generic) + timeout= in try body — still a retry.
+    # Generic exception catch overrides the timeout= presence.
+    src = """
+import asyncio
+
+async def retry_with_explicit_timeout():
+    while True:
+        try:
+            result = await asyncio.wait_for(client.post(url), timeout=5)
+            return result
+        except Exception:
+            continue
+"""
+    violations = analyze_source(src)
+    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
+    assert len(v019) == 1
+
+
+def test_019_no_false_positive_poll_loop_pass_body():
+    # asyncio.wait_for polling where the except body is only `pass` (not continue).
+    # Equivalent poll pattern: pass lets the while loop continue naturally.
+    src = """
+import asyncio
+
+async def heartbeat_loop(stop_event):
+    while not stop_event.is_set():
+        await do_work()
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=1)
+            break
+        except asyncio.TimeoutError:
+            pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
 # ─── PYVIBE-020: put_nowait() without QueueFull handler ──────────────────────
 
 def test_020_detects_put_nowait_in_async_def():
