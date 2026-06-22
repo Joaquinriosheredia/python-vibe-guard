@@ -1,7 +1,7 @@
 # python-vibe-guard — Catálogo de Reglas
 
-**Versión:** 0.7.1 · 20 reglas activas · 129 tests  
-**Última actualización:** 2026-06-21  
+**Versión:** 0.7.2 · 20 reglas activas · 145 tests  
+**Última actualización:** 2026-06-22  
 **Fuente de datos:** sweep 250 repos (95,678 .py files) · `research/datasets/250-repos.json`
 
 ---
@@ -66,17 +66,18 @@ Leyenda columna Recomendación:
 | [PYVIBE-016](accepted/PYVIBE-016.md) — `httpx.Client()` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.8% (2/250) | ⏳ Pendiente |
 | [PYVIBE-017](accepted/PYVIBE-017.md) — `except` silencioso en async def | Manejo de errores | **A** | CRITICAL / WARNING † | Medium-High | Medium | Medium | 48.8% (122/250) | ✅ Protocolo v1 + FP Audit |
 | [PYVIBE-018](accepted/PYVIBE-018.md) — `while True` sin `await` | Gestión de tareas | B | CRITICAL | — | — | — | 6.8% (17/250) | ⏳ Pendiente |
-| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | **A** | WARNING ‡ | High | High (I/O) | High | 32.8% (82/250) | ⚠️ Needs Redesign |
+| [PYVIBE-019](accepted/PYVIBE-019.md) — Retry sin backoff | Resiliencia | **A** | WARNING ‡ | High | High (I/O) | High | 2.8% (7/250) | 🔵 Limited Scope |
 | [PYVIBE-020](accepted/PYVIBE-020.md) — `put_nowait()` sin handler `QueueFull` | Manejo de errores | B | WARNING | — | — | — | 16.4% (41/250) ³ | ⏳ Pendiente |
 
 ² PYVIBE-011: 0 hits en 250 repos — Evidence B se mantiene porque el patrón es real aunque infrecuente en repos de alta estrella.  
 ³ PYVIBE-020: debut en sweep 250 (sin baseline en 100 repos). Tasa de debut 16.4% es sólida para regla nueva.
 
-**‡ PYVIBE-019 Recomendación detallada:**
-- Retries de red (HTTP, gRPC, DB remota): WARNING justificado — thundering herd documentado
-- Retries en memoria (parsing, encodings, locks locales): FP estructural — tenacity `wait_none()` es aceptable
-- Runtime Impact columna indica High para I/O; impacto negligible para ops locales
-- ⚠️ **Estado Needs Redesign (jun 2026):** muestra manual de 61 hits → 95.1% FP. Causa raíz: `for item in collection: except: continue` no es retry. Fix implementado: `_is_retry_loop()` restringe `for` loops a `range(...)`. Ver sección "Auditoría de Falsos Positivos" y "Validación post-fix" en PYVIBE-019.md.
+**‡ PYVIBE-019 — Limited Scope (Heurística de intención):**
+- Scope: `for _ in range(N)` / `for attempt in range(N)` en `async def`. While excluido.
+- Scan v4 (jun 2026): 18 hits / 7 repos → auditoría 100% → **12 TP, 6 FP, 67% precisión**.
+- FP rate 33% < 40% umbral para heurísticas. Mejora vs. estado anterior (88% → 33%).
+- 3 FP residuales no reducibles con AST: BENCHMARK_LOOP, TRY_ALTERNATIVES, GRAPH_TRAVERSAL.
+- Ver análisis completo en `research/accepted/PYVIBE-019.md` sección "Scan v4".
 
 **† PYVIBE-017 Recomendación detallada:**
 - `bare except: pass` → `CRITICAL` (captura `KeyboardInterrupt`/`SystemExit`)

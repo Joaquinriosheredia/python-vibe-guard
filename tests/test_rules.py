@@ -1347,18 +1347,136 @@ async def call_api():
     assert v019[0].severity == "WARNING"
 
 
-def test_019_detects_while_loop_retry_pass():
+def test_019_detects_underscore_range_retry():
+    # for _ in range(N) is the canonical anonymous retry counter.
     src = """
-async def poll():
-    while running:
+async def generate_unique_key(db):
+    for _ in range(10):
+        key = generate_random_key()
         try:
-            check_status()
-        except Exception:
-            pass
+            await db.insert(key)
+            return key
+        except UniqueConstraintError:
+            continue
+    raise RuntimeError("could not generate unique key")
 """
     violations = analyze_source(src)
     v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
     assert len(v019) == 1
+
+
+def test_019_no_false_positive_while_out_of_scope():
+    # while loops are completely out of scope for PYVIBE-019 v3 — even clear retries.
+    src = """
+async def retry_while():
+    attempt = 0
+    while attempt < 3:
+        try:
+            return await client.post(url)
+        except Exception:
+            attempt += 1
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_except_pass_in_for_range():
+    # except: pass in for-range does NOT fire — pass is not explicit retry intent.
+    # Confirmed by CLEANUP_PASS analysis: 97/186 hits (52.2%) were pass-only FPs.
+    src = """
+async def warmup():
+    for _ in range(10):
+        try:
+            await client.get(health_url)
+        except Exception:
+            pass
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_for_i_range_index():
+    # for i in range(N) where i is used as an element index is not retry.
+    src = """
+async def probe_elements(page):
+    count = await page.locator(".item").count()
+    for i in range(count):
+        try:
+            text = await page.locator(".item").nth(i).inner_text()
+            if text == "target":
+                return i
+        except Exception:
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_for_chunk_start_range():
+    # for chunk_start in range(0, N, chunk_size): bulk iteration over chunks, not retry.
+    src = """
+async def bulk_insert(items, chunk_size=100):
+    for chunk_start in range(0, len(items), chunk_size):
+        chunk = items[chunk_start:chunk_start + chunk_size]
+        try:
+            await db.bulk_insert(chunk)
+        except Exception as e:
+            logger.error(e)
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_bare_sleep_backoff():
+    # sleep(N) imported directly (no asyncio./time. prefix) counts as backoff.
+    src = """
+from time import sleep
+
+async def call_api():
+    for _ in range(3):
+        try:
+            return await client.post(url)
+        except Exception:
+            sleep(2)
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_backoff_class_asleep():
+    # await backoff.asleep() from a Backoff class counts as backoff.
+    src = """
+async def retry_with_backoff(backoff):
+    for _ in range(5):
+        try:
+            return await client.post(url)
+        except Exception:
+            await backoff.asleep()
+            continue
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
+
+
+def test_019_no_false_positive_poll_loop_in_for_range():
+    # for _ in range(N) + asyncio.TimeoutError + timeout= kwarg = bounded poll, not retry.
+    src = """
+import asyncio
+
+async def wait_with_retries(event, max_polls=20):
+    for _ in range(max_polls):
+        try:
+            await asyncio.wait_for(event.wait(), timeout=1.0)
+            return True
+        except asyncio.TimeoutError:
+            continue
+    return False
+"""
+    violations = analyze_source(src)
+    assert not any(v.rule_id == "PYVIBE-019" for v in violations)
 
 
 def test_019_no_false_positive_escalation_if_raise():
@@ -1513,8 +1631,7 @@ async def fetch_all(urls):
 
 
 def test_019_no_false_positive_poll_loop_asyncio_wait_for():
-    # Classic shutdown-signal polling: asyncio.wait_for + except asyncio.TimeoutError
-    # is a polling pattern, not a retry — the timeout is expected normal behavior.
+    # while loops are out of scope for PYVIBE-019 v3. No violations expected.
     src = """
 import asyncio
 
@@ -1531,7 +1648,7 @@ async def _run_loop(self):
 
 
 def test_019_no_false_positive_poll_loop_queue_get():
-    # Queue polling with timeout: TimeoutError means "no item yet, keep polling".
+    # while loops are out of scope for PYVIBE-019 v3. No violations expected.
     src = """
 import asyncio
 
@@ -1548,7 +1665,7 @@ async def queue_worker(queue):
 
 
 def test_019_no_false_positive_poll_loop_bare_timeout_error():
-    # bare TimeoutError (not asyncio.TimeoutError) — same exclusion applies.
+    # while loops are out of scope for PYVIBE-019 v3. No violations expected.
     src = """
 async def wait_for_event(event):
     while True:
@@ -1561,47 +1678,8 @@ async def wait_for_event(event):
     assert not any(v.rule_id == "PYVIBE-019" for v in violations)
 
 
-def test_019_detects_while_timeout_error_without_timeout_kwarg():
-    # asyncio.TimeoutError in except, but NO timeout= kwarg in try body.
-    # This looks like a genuine network retry that happens to time out.
-    src = """
-import asyncio
-
-async def retry_on_timeout():
-    while True:
-        try:
-            await client.post(url)
-            break
-        except asyncio.TimeoutError:
-            continue
-"""
-    violations = analyze_source(src)
-    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
-    assert len(v019) == 1
-
-
-def test_019_detects_while_exception_with_timeout_kwarg():
-    # except Exception (generic) + timeout= in try body — still a retry.
-    # Generic exception catch overrides the timeout= presence.
-    src = """
-import asyncio
-
-async def retry_with_explicit_timeout():
-    while True:
-        try:
-            result = await asyncio.wait_for(client.post(url), timeout=5)
-            return result
-        except Exception:
-            continue
-"""
-    violations = analyze_source(src)
-    v019 = [v for v in violations if v.rule_id == "PYVIBE-019"]
-    assert len(v019) == 1
-
-
 def test_019_no_false_positive_poll_loop_pass_body():
-    # asyncio.wait_for polling where the except body is only `pass` (not continue).
-    # Equivalent poll pattern: pass lets the while loop continue naturally.
+    # while + pass: while is out of scope AND pass is not a retry trigger. No violations.
     src = """
 import asyncio
 

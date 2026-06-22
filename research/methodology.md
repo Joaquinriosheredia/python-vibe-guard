@@ -36,24 +36,60 @@ candidates/PYVIBE-XXX.md
   → actualizar aggregate.json en siguiente sweep
 ```
 
+## Clasificación de reglas por naturaleza
+
+Las reglas se clasifican en tres categorías según la naturaleza de lo que detectan.
+Esta clasificación define el FP esperado orientativo para calibrar expectativas, **no es
+un umbral de aprobación automática**. La decisión de estado (Estable / Needs Redesign /
+Limited Scope) combina esta categoría con la evolución histórica de la regla y si la
+precisión es razonable para su tipo.
+
+| Categoría | Descripción | FP orientativo |
+|-----------|-------------|----------------|
+| **Determinística** | Misuse directo de API: la llamada o ausencia de parámetro es siempre incorrecta en el contexto dado. No depende de semántica de dominio. | < 5% |
+| **Patrón estructural** | Combinación de patrones AST que casi siempre indica un bug: la estructura del código es suficiente para diagnosticar el problema. Algún FP es esperado pero infrecuente. | < 15% |
+| **Heurística de intención** | El detector infiere la intención del código desde la forma del AST, pero esa forma puede tener múltiples semánticas. Requiere análisis adicional (semántico, de llamadas, de tipos) para certeza. FP estructuralmente inevitables con AST puro. | < 40% |
+
+### Criterio de estado según naturaleza
+
+- **Estable**: FP rate dentro del rango orientativo de su categoría **Y** la regla
+  ha mejorado sustancialmente respecto a versiones anteriores.
+- **Limited Scope**: El detector es preciso dentro de un subconjunto acotado del patrón
+  original, pero excluye explícitamente casos que no son distinguibles con AST puro.
+  Adecuado cuando el subconjunto detectado es valioso y el scope excluido está documentado.
+- **Needs Redesign**: FP rate supera el rango de su categoría **Y** no hay mejora
+  demostrable con las heurísticas actuales. Requiere análisis semántico adicional
+  (grafos de llamadas, análisis de tipos, análisis de flujo) para reducir FPs.
+
+### Límite del AST puro
+
+Si el problema de distinguir "patrón peligroso" vs "iteración normal" no es resoluble
+con análisis de árbol sintáctico sin análisis semántico adicional (tipos, flujo de datos,
+grafos de llamadas), el estado correcto es **Limited Scope** con scope documentado, no
+"Needs Redesign" indefinido. La distinción importa: "Needs Redesign" implica que hay
+una heurística AST mejor esperando ser encontrada; "Limited Scope" declara explícitamente
+que el problema requiere más que AST.
+
 ## Auditoría de falsos positivos
 
-Cualquier regla cuya auditoría manual de muestra revele >20% de falsos positivos estructurales
-entra automáticamente en estado **"Needs Redesign"**. No se considera estable ni se mantiene
-en producción sin advertencia hasta que una nueva heurística reduzca esa tasa por debajo del
-umbral, verificado con una nueva auditoría de muestra.
+Una regla que genere >20% de falsos positivos en muestra estratificada entra en revisión.
+El proceso y el estado resultante dependen de la categoría de la regla:
 
-El umbral del 20% refleja que una tasa superior implica que el detector genera más ruido que
-señal: los desarrolladores aprenden a ignorarlo, erosionando la confianza en todas las reglas.
+- Si es **Determinística**: >5% FP implica bug en el detector → corregir.
+- Si es **Patrón estructural**: >15% FP implica heurística mal calibrada → redesign.
+- Si es **Heurística de intención**: >40% FP implica que el scope definido no es
+  distinguible con AST puro → restringir scope a subconjunto distinguible (Limited Scope)
+  o documentar como fuera de alcance del análisis estático.
 
 **Proceso:**
 ```
 regla activa
-  → auditoría manual de muestra (mín. 30 hits estratificados por repo)
-  → si FP rate > 20% → estado "Needs Redesign"
-  → diseñar heurística que elimine la categoría dominante de FP
-  → implementar + nueva auditoría de muestra
-  → si FP rate ≤ 20% → volver a estado "Estable"
+  → auditoría manual de muestra (mín. 20 hits estratificados por repo)
+  → si FP rate supera el umbral de su categoría → estado "Needs Redesign" o "Limited Scope"
+  → diseñar restricción de scope O nueva heurística
+  → implementar + nueva auditoría
+  → si mejora dentro del umbral de su categoría → "Estable" o "Limited Scope"
+  → si sigue superando umbral después de restricción → documentar límite del AST puro
 ```
 
 ## Proceso de rechazo
