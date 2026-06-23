@@ -31,3 +31,31 @@ prácticas y a usar `pathlib` en lugar de `os.*` directamente. El patrón es má
 en código legacy o de integración no representado en la muestra actual.
 
 Mantener la regla. Revisar si se añaden repos de código legacy al dataset en sweeps futuros.
+
+---
+
+## Auditoría de Precisión (Sweep 250)
+
+**Muestra analizada:** 0 hits de 0 totales (0 repos)
+**Metodología:** N/A — sin hits para clasificar
+
+### Clasificación hit-by-hit
+
+Sin violaciones detectadas en 250 repos.
+
+### Resultado
+
+| Métrica | Valor |
+|---------|-------|
+| TP | 0 |
+| FP | 0 |
+| EDGE | 0 |
+| Precisión (TP/total) | N/A |
+
+### Patrones de FP identificados
+
+Ninguno — sin hits en el dataset.
+
+### Recomendación de Evidence Level
+
+**Mantener B.** La regla es correcta en diseño (os.path.exists, os.listdir, os.stat son bloqueantes y no deberían llamarse directamente en async def). La ausencia de hits indica que repos de alta estrella usan mayoritariamente pathlib y aiofiles. Ampliar el dataset con repos legacy en sweeps futuros para validar prevalencia real.
