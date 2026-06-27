@@ -997,6 +997,32 @@ async def handler():
     assert violations[0].severity == "CRITICAL"
 
 
+# ─── Fix 3: TEST_FILE_DOWNGRADE extended to PYVIBE-005 ───────────────────────
+
+def test_005_downgraded_to_warning_in_test_file():
+    src = """
+@app.task
+def my_celery_fixture(x):
+    return x
+"""
+    violations = analyze_source(src, "tests/test_tasks.py")
+    v005 = [v for v in violations if v.rule_id == "PYVIBE-005"]
+    assert len(v005) == 1
+    assert v005[0].severity == "WARNING"
+
+
+def test_005_still_critical_in_production_file():
+    src = """
+@app.task
+def send_invoice(order_id):
+    billing_service.charge(order_id)
+"""
+    violations = analyze_source(src, "myapp/tasks.py")
+    v005 = [v for v in violations if v.rule_id == "PYVIBE-005"]
+    assert len(v005) == 1
+    assert v005[0].severity == "CRITICAL"
+
+
 # ─── Fix 2: downgrade_in_tests and skip_test_files API ───────────────────────
 
 def test_downgrade_all_rules_in_test_file():

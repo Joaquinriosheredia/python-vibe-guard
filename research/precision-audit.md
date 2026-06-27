@@ -22,7 +22,7 @@
 | PYVIBE-002 | Heurística | 14 | 14 | 5 | 8 | 1 | 36–38% | ⚠️ Needs Review |
 | PYVIBE-003 | Determinística | 1 | 1 | 0 | 1 | 0 | 0% | ⚠️ Needs Review |
 | PYVIBE-004 | Heurística | 60 | 14 | 0 | 12 | 2 | 0–14% | 🔵 Limited Scope |
-| PYVIBE-005 | Heurística | 605 † | 20 | 17 | 3 | 0 | 85% | ✅ OK (post-fix) |
+| PYVIBE-005 | Heurística | 605 † | 15 | 12 | 2 | 1 | 86% | ✅ OK (post-fix + TEST_FILE_DOWNGRADE) |
 | PYVIBE-006 | Heurística | 28 | 20 | 8 | 9 | 3 | 40–47% | ⚠️ Needs Review |
 | PYVIBE-007 | Heurística | 61 | 20 | 6 | 13 | 1 | 30–32% | ⚠️ Needs Review |
 | PYVIBE-008 | Heurística | 436 | 20 | 5 | 15 | 0 | 25% | 🔵 Limited Scope |
@@ -39,11 +39,11 @@
 | PYVIBE-019 | Heurística | 760 ‡ | 18 ‡ | 12 | 6 | — | 67% | 🔵 Limited Scope |
 | PYVIBE-020 | Heurística | 295 | 20 | 8 | 11 | 1 | 40–42% | ⚠️ Needs Review |
 
-† PYVIBE-005: 1,072 hits en raw scan (pre-fix). Tras fix de CROSS_FRAMEWORK (2026-06-27): 605 hits supervivientes (−43.6%). Auditoría post-fix sobre muestra de 20 hits con detector corregido.  
+† PYVIBE-005: 1,072 hits en raw scan (pre-fix). Tras fix de CROSS_FRAMEWORK (2026-06-27): 605 hits (−43.6%); 571 CRITICAL + 34 WARNING tras TEST_FILE_DOWNGRADE. Auditoría final: 15 hits CRITICAL, 12 TP, 2 FP, 1 EDGE → 86%.  
 ‡ PYVIBE-019: 760 hits en raw scan (pre–Scan v4, incluye while loops). Auditoría sobre 18 hits tras restricción de scope a `for _ in range(N)` (Scan v4, jun 2026).
 
 **Resumen:**
-- ✅ OK: 8 reglas (001, 005 post-fix, 009, 010, 011, 013, 017, y 019 en Limited Scope funcional)
+- ✅ OK: 8 reglas (001, 005 post-fix+TEST_FILE_DOWNGRADE, 009, 010, 011, 013, 017, y 019 en Limited Scope funcional)
 - ⚠️ Needs Review: 9 reglas (002, 003, 006, 007, 012, 014, 015, 016, 018)
 - 🔵 Limited Scope: 3 reglas (004, 008, 019)
 
@@ -260,7 +260,53 @@ El detector usaba `isinstance(node, ast.Attribute) and node.attr == "task"` para
 **Patrones de FP residuales:**
 1. **OWN_TEST_SUITE** — test tasks en el propio repo de Celery (fixtures sin time_limit intencionales). Los 141/605 hits del repo `celery/t/` están en test files.
 
-**Estado: ✅ OK (post-fix)** — FP rate 15% · dentro del umbral del 40% para heurística. 7 tests nuevos añadidos. Fix en producción.
+---
+
+### Fix aplicado #2 — TEST_FILE_DOWNGRADE extendido a PYVIBE-005 (2026-06-27)
+
+**Motivación:** FP residual OWN_TEST_SUITE — test fixtures de Celery's own test suite (`celery/t/`) que omiten `time_limit` intencionalmente.
+
+**Cambio:** `TEST_FILE_DOWNGRADE` en `pyvibe/analyzer.py` ampliado de `{001, 007, 009, 013}` a `{001, 005, 007, 009, 013}`.
+
+**Impacto medido post-downgrade:**
+- 605 hits totales → 571 CRITICAL + 34 WARNING (test files convencionales)
+- Auditoría de 15 hits CRITICAL (seed=99): 12 TP, 2 FP, 1 EDGE → **86% precisión**
+
+**Clasificación hit-by-hit (15 hits CRITICAL, seed=99):**
+
+| # | Repo | Función | Clasificación | Razón |
+|---|------|---------|---------------|-------|
+| 01 | Cloud-CV/EvalAI | setup_ec2 | **TP** | Tarea AWS producción sin time_limit |
+| 02 | jumpserver/jumpserver | applet_host_generate_accounts | **TP** | Tarea producción seguridad |
+| 03 | MicroPyramid/Django-CRM | auto_stop_stale_timers | **TP** | `@shared_task`, CRM producción |
+| 04 | paperless-ngx/paperless-ngx | remove_document_from_llm_index | **TP** | `@shared_task`, LLM index |
+| 05 | FuzzyGrim/Yamtrack | reload_calendar | **TP** | `@shared_task(name=...)` calendar |
+| 06 | GeoNode/geonode | create_dynamic_structure | **TP** | Tarea GIS producción |
+| 07 | amidaware/tacticalrmm | handle_task_email_alert | **TP** | `@app.task` RMM producción |
+| 08 | pretix/pretix | sync_single | **TP** | `@app.task(base=TransactionAwareTask)` |
+| 09 | GeoNode/geonode | rollback | **TP** | Tarea GIS producción |
+| 10 | jumpserver/jumpserver | check_password_expired | **TP** | Tarea seguridad producción |
+| 11 | celery | add | **FP** | `t/unit/conftest.py` — `_is_test_file` no reconoce `t/` como dir de tests |
+| 12 | fastapi-best-architecture | task_demo_async | **EDGE** | Repo de demos/ejemplos, no producción |
+| 13 | pretix/pretix | scheduled_organizer_export | **TP** | Export programado producción |
+| 14 | celery | retry_once | **FP** | `t/integration/tasks.py` — mismo gap `t/` |
+| 15 | wger-project/wger | sync_off_daily_delta | **TP** | `@app.task` salud/fitness producción |
+
+**FP residuales (2):** ambos de `celery/t/` — Celery usa `t/` en lugar de `tests/`, lo cual no reconoce `_is_test_file()`. Gap conocido de la función compartida, fuera del scope de PYVIBE-005.
+
+| Métrica | Post CROSS_FRAMEWORK fix | Post TEST_FILE_DOWNGRADE |
+|---------|--------------------------|--------------------------|
+| Hits CRITICAL | 605 | 571 |
+| Hits WARNING | 0 | 34 |
+| Muestra auditada | 20 | 15 |
+| TP | 17 | 12 |
+| FP | 3 | 2 |
+| EDGE | 0 | 1 |
+| Precisión | 85% | **86%** |
+
+2 tests nuevos (`test_005_downgraded_to_warning_in_test_file`, `test_005_still_critical_in_production_file`).
+
+**Estado: ✅ OK (post-fix + TEST_FILE_DOWNGRADE)** — FP rate 14% sobre CRITICAL hits · dentro del umbral del 40% para heurística. 34 test-file hits silenciados a WARNING. FP residual limitado a `celery/t/` (directorio `t/` no convencional).
 
 ---
 
@@ -690,9 +736,9 @@ El detector confunde nombres de variables/funciones/clases con los módulos/clas
 
 ### Patrón de mejora sistémica — TEST_FILE_DOWNGRADE
 
-TEST_FILE_DOWNGRADE está activo solo en: PYVIBE-001, PYVIBE-007, PYVIBE-009, PYVIBE-013.
+TEST_FILE_DOWNGRADE activo en: **PYVIBE-001, PYVIBE-005, PYVIBE-007, PYVIBE-009, PYVIBE-013** (PYVIBE-005 añadido 2026-06-27).
 
-**Candidatas a extender TEST_FILE_DOWNGRADE:**
+**Candidatas pendientes a extender TEST_FILE_DOWNGRADE:**
 - PYVIBE-002 (+15pp estimado)
 - PYVIBE-012 (+20pp estimado)
 - PYVIBE-014 (+15pp estimado) — podría llevarla a OK
@@ -703,12 +749,13 @@ TEST_FILE_DOWNGRADE está activo solo en: PYVIBE-001, PYVIBE-007, PYVIBE-009, PY
 
 ## Mapa de acción prioritaria
 
-| Prioridad | Acción | Reglas afectadas | Impacto |
-|-----------|--------|-----------------|---------|
-| P0 | Fix INNER_SYNC_FUNCTION (verificar ancestro inmediato) | 003, 015, 018 | Resuelve bug sistémico |
-| P0 | Fix CROSS_FRAMEWORK en PYVIBE-005 (verificar import Celery) | 005 | Nuevo hallazgo crítico |
-| P1 | Fix NAME_COLLISION (rastrear imports, verificar módulo origen) | 002, 004, 008 | Resuelve bug sistémico |
-| P1 | Extender TEST_FILE_DOWNGRADE | 002, 012, 014, 016, 018 | +15–40pp por regla |
-| P2 | Análisis de flujo para ContextVar reset() | 006 | Requiere semántica |
-| P2 | Análisis de maxsize para Queue.put_nowait() | 020 | Requiere análisis de flujo |
-| P3 | Rastrear referencia a create_task/ensure_future | 012, 014 | Mejora adicional post-TEST_FILE |
+| Prioridad | Acción | Reglas afectadas | Estado |
+|-----------|--------|-----------------|--------|
+| P0 | ~~Fix CROSS_FRAMEWORK en PYVIBE-005~~ | 005 | **✅ DONE (2026-06-27)** |
+| P0 | ~~Extender TEST_FILE_DOWNGRADE a PYVIBE-005~~ | 005 | **✅ DONE (2026-06-27)** |
+| P0 | Fix INNER_SYNC_FUNCTION (verificar ancestro inmediato) | 003, 015, 018 | Pendiente |
+| P1 | Fix NAME_COLLISION (rastrear imports, verificar módulo origen) | 002, 004, 008 | Pendiente |
+| P1 | Extender TEST_FILE_DOWNGRADE | 002, 012, 014, 016, 018 | Pendiente |
+| P2 | Análisis de flujo para ContextVar reset() | 006 | Pendiente |
+| P2 | Análisis de maxsize para Queue.put_nowait() | 020 | Pendiente |
+| P3 | Rastrear referencia a create_task/ensure_future | 012, 014 | Pendiente |

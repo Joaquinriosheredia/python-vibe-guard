@@ -50,9 +50,10 @@ ALL_RULES = [
 ALL_RULE_IDS: FrozenSet[str] = frozenset(r.RULE_ID for r in ALL_RULES)
 
 # Rules downgraded CRITICAL → WARNING when the violation is inside a test file.
-# time.sleep in fixtures, subprocess in service-startup helpers, and open() in
-# async test helpers (e.g. asyncssh, aiofiles own test suites) are valid patterns.
-TEST_FILE_DOWNGRADE: FrozenSet[str] = frozenset({"PYVIBE-001", "PYVIBE-007", "PYVIBE-009", "PYVIBE-013"})
+# time.sleep in fixtures, subprocess in service-startup helpers, open() in
+# async test helpers (e.g. asyncssh, aiofiles own test suites), and Celery task
+# fixtures in test suites (e.g. celery/t/) that intentionally omit time_limit.
+TEST_FILE_DOWNGRADE: FrozenSet[str] = frozenset({"PYVIBE-001", "PYVIBE-005", "PYVIBE-007", "PYVIBE-009", "PYVIBE-013"})
 
 
 def _is_test_file(filepath: str) -> bool:
