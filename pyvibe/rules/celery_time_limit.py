@@ -33,6 +33,19 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
 
     def __init__(self):
         self.violations: List[Violation] = []
+        self._has_celery_import: bool = False
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            if alias.name == "celery" or alias.name.startswith("celery."):
+                self._has_celery_import = True
+                break
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module and (node.module == "celery" or node.module.startswith("celery.")):
+            self._has_celery_import = True
+        self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self._check(node)
@@ -60,12 +73,27 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
     def _is_task_decorator(self, decorator: ast.expr) -> bool:
         # Unwrap @app.task(...) or @shared_task(...) to their func node
         node = decorator.func if isinstance(decorator, ast.Call) else decorator
-        # @shared_task
+        # @shared_task — Celery-specific; taskiq/huey/dramatiq don't use this name
         if isinstance(node, ast.Name) and node.id == "shared_task":
             return True
-        # @app.task  /  @celery.task  /  @<any>.task
         if isinstance(node, ast.Attribute) and node.attr == "task":
-            return True
+            receiver = node.value
+            # @self.huey.task(), @self.app.task — chained attrs seen only in
+            # test infrastructure (Celery own tests, Huey tests). Skip.
+            if not isinstance(receiver, ast.Name):
+                return False
+            name = receiver.id.lower()
+            # @app.task / @importer_app.task — "app" strongly signals a Celery
+            # application object; no other common async task framework uses it
+            if "app" in name:
+                return True
+            # @celery.task / @celery_app.task / @my_celery.task
+            if "celery" in name:
+                return True
+            # @broker.task (taskiq), @huey.task, @dramatiq_broker.task etc. —
+            # only flag when the file explicitly imports from the celery package,
+            # confirming this isn't a different task framework
+            return self._has_celery_import
         return False
 
     def _has_time_limit(self, decorator: ast.expr) -> bool:

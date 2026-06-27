@@ -245,6 +245,85 @@ def process_payment(order_id):
     assert len(violations) == 0
 
 
+def test_005_no_fp_taskiq_broker_task():
+    # taskiq uses @broker.task — must NOT fire without a celery import
+    src = """
+@broker.task
+def process_payment(order_id):
+    return payment_service.charge(order_id)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 0
+
+
+def test_005_no_fp_huey_task():
+    # huey uses @huey.task — must NOT fire without a celery import
+    src = """
+@huey.task
+def process_image(path):
+    return resize(path)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 0
+
+
+def test_005_no_fp_self_huey_task():
+    # huey tests use @self.huey.task() — chained Attribute receiver, must NOT fire
+    src = """
+@self.huey.task()
+def my_task(x):
+    return x + 1
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 0
+
+
+def test_005_detects_celery_app_receiver():
+    # @celery_app.task — "celery" in receiver name, fire even without import
+    src = """
+@celery_app.task
+def send_notification(user_id):
+    push_service.notify(user_id)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 1
+    assert violations[0].function_name == "send_notification"
+
+
+def test_005_detects_celery_receiver():
+    # @celery.task — "celery" in receiver name
+    src = """
+@celery.task(max_retries=3, queue="webhooks")
+def call_webhook(payload):
+    requests.post(payload["url"], json=payload)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 1
+
+
+def test_005_broker_task_with_celery_import_fires():
+    # Non-standard receiver BUT file has explicit celery import → flag it
+    src = """
+import celery
+@broker.task
+def process(data):
+    return transform(data)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 1
+
+
+def test_005_detects_importer_app_receiver():
+    # @importer_app.task — "app" substring in receiver name (real-world: GeoNode)
+    src = """
+@importer_app.task(base=BaseTask, name="myapp.process")
+def process_file(file_id):
+    storage.process(file_id)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-005"]
+    assert len(violations) == 1
+
+
 # ─── PYVIBE-007 ──────────────────────────────────────────────────────────────
 
 def test_007_detects_subprocess_run_in_async():

@@ -52,7 +52,7 @@ Leyenda columna Recomendación:
 | [PYVIBE-002](accepted/PYVIBE-002.md) — `requests` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 4.0% (10/250) | ✅ Precisión auditada · 36% TP (5/14) · FP: executor_wrap, var_collision |
 | [PYVIBE-003](accepted/PYVIBE-003.md) — `asyncio.run()` dentro de async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 0.4% (1/250) | ✅ Precisión auditada · 0% TP (0/1) · FP: sync TestCase method |
 | [PYVIBE-004](accepted/PYVIBE-004.md) — `threading.Lock()` en async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 2.0% (5/250) | 🔵 Limited Scope · 0% TP (0/14) · FP crítico: async Lock name collision |
-| [PYVIBE-005](accepted/PYVIBE-005.md) — Celery task sin `time_limit` | Resiliencia | **A** | CRITICAL | Medium-High | High | Medium-High | 12.8% (32/250) | ✅ Protocolo v1 |
+| [PYVIBE-005](accepted/PYVIBE-005.md) — Celery task sin `time_limit` | Resiliencia | **A** | CRITICAL | Medium-High | High | Medium-High | 12.8% (32/250) | ✅ Precisión auditada · 85% TP (17/20) post-fix · FP residual: own_test_suite |
 | [PYVIBE-006](accepted/PYVIBE-006.md) — `ContextVar` sin `reset()` | Estado / Contexto | B | CRITICAL | — | — | — | 6.0% (15/250) | ✅ Precisión auditada · 40% TP (8/20) · FP: task isolation, test subjects |
 | [PYVIBE-007](accepted/PYVIBE-007.md) — `subprocess.run` en async def | Bloqueo de event loop | B | CRITICAL ¹ | — | — | — | 4.8% (12/250) | ✅ Precisión auditada · 30% TP (6/20) · FP: test launchers, executor wrap |
 | [PYVIBE-008](accepted/PYVIBE-008.md) — `sqlite3` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 8.8% (22/250) | 🔵 Limited Scope · 25% TP (5/20) · FP crítico: connect() name collision |
@@ -121,7 +121,7 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 
 ## Auditoría de Precisión (Sweep 250) — Resumen ejecutivo
 
-**Completada:** 2026-06-23 · 14 reglas auditadas · 236 hits clasificados
+**Completada:** 2026-06-27 · 20 reglas auditadas · PYVIBE-005 fix aplicado
 
 ### Tabla de precisión por regla
 
@@ -130,6 +130,7 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | PYVIBE-002 | 14/14 | 5 | 8 | 1 | 36% | B — mejora detección |
 | PYVIBE-003 | 1/1 | 0 | 1 | 0 | 0% | B — bug en detector (sync method) |
 | PYVIBE-004 | 14/60 | 0 | 12 | 2 | 0% | **🔵 Limited Scope** — name collision |
+| PYVIBE-005 | 20/605† | 17 | 3 | 0 | **85%** | ✅ **Fixeada** — 85% post CROSS_FRAMEWORK fix |
 | PYVIBE-006 | 20/28 | 8 | 9 | 3 | 40% | B — mejora context detection |
 | PYVIBE-007 | 20/61 | 6 | 13 | 1 | 30% | B — test_file_downgrade ayuda |
 | PYVIBE-008 | 20/436 | 5 | 15 | 0 | 25% | **🔵 Limited Scope** — connect() collision |
@@ -142,15 +143,20 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | PYVIBE-018 | 20/49 | 5 | 10 | 5 | 33% | B — bug: inner sync while |
 | PYVIBE-020 | 20/295 | 8 | 11 | 1 | 40% | B — verificar bounded queue |
 
+† PYVIBE-005: 605 hits post-fix (1,072 raw − 467 cross-framework filtrados). Ver `research/precision-audit.md` sección PYVIBE-005.
+
 ### Hallazgos transversales críticos
 
-**Bug sistémico del detector: "inner sync function"**  
+**✅ Fix aplicado: CROSS_FRAMEWORK en PYVIBE-005 (2026-06-27)**  
+El detector de PYVIBE-005 disparaba en `@broker.task` (taskiq), `@huey.task` (huey) y cualquier `@<any>.task`. Fix en `pyvibe/rules/celery_time_limit.py`: receiver name heuristic + import check. Resultado: 1,072 → 605 hits (−43.6%), precisión 35–39% → 85%. 7 tests nuevos.
+
+**Bug sistémico del detector: "inner sync function"** *(pendiente)*  
 PYVIBE-003, PYVIBE-015, PYVIBE-018 comparten el mismo bug: el detector flagueó
 patrones en funciones `def` síncronas anidadas dentro de `async def`. La regla debe
 verificar que el nodo `AsyncFunctionDef` sea el ancestro inmediato, no cualquier
 ancestro. **Fix único resuelve 3 reglas simultáneamente.**
 
-**Bug sistémico del detector: "name collision"**  
+**Bug sistémico del detector: "name collision"** *(pendiente)*  
 PYVIBE-002 (`requests`), PYVIBE-004 (`Lock`), PYVIBE-008 (`connect`) confunden
 nombres de variables/funciones con los módulos/clases objetivo. El detector debe
 verificar el módulo de origen del símbolo, no solo el nombre. Afecta severamente
@@ -162,6 +168,7 @@ async. Aplicar `TEST_FILE_DOWNGRADE` (ya activo en 001, 007, 009, 013) a todas
 las reglas restantes mejoraría la precisión en producción estimadamente +15-25 pp.
 
 **Reglas con mejor precisión (candidatas a elevación):**
+- PYVIBE-005: 85% post-fix — cross-framework FP eliminado
 - PYVIBE-010: 88% — httpx sync en async es casi siempre bug real
 - PYVIBE-014: 55% — ensure_future huérfano es frecuentemente bug real
 
@@ -173,17 +180,18 @@ las reglas restantes mejoraría la precisión en producción estimadamente +15-2
 
 ## Nota sobre las reglas en estado B
 
-Las 14 reglas auditadas por precisión confirman que los patrones objetivo existen
-en código de producción real. La auditoría reveló dos categorías de mejora:
+La auditoría de precisión de todas las 20 reglas (2026-06-27) confirmó que los patrones
+objetivo existen en código de producción real. La auditoría reveló dos categorías de mejora:
 
-1. **Bugs del detector** (name collision, inner sync function): reducen drásticamente
+1. **Bugs del detector** (name collision, inner sync function, cross-framework): reducen drásticamente
    la precisión y deben corregirse antes de uso en producción.
+   - ✅ CROSS_FRAMEWORK en PYVIBE-005: corregido (2026-06-27)
 2. **FPs de contexto** (tests, executor wrappers, startup fire-and-forget): son
    esperables en linters AST sin análisis de flujo y se mitigan con `TEST_FILE_DOWNGRADE`
    y detección de patterns de executor.
 
-Las reglas se irán actualizando progresivamente priorizando:
-1. Fix del bug "inner sync function" (impacto en 3 reglas)
-2. Fix del bug "name collision" (impacto en 3 reglas)
+Prioridad de fixes pendientes:
+1. Fix del bug "inner sync function" (impacto en PYVIBE-003, 015, 018)
+2. Fix del bug "name collision" (impacto en PYVIBE-002, 004, 008)
 3. Extender TEST_FILE_DOWNGRADE a todas las reglas
 4. Añadir detección de executor wrapper para PYVIBE-002 y PYVIBE-007

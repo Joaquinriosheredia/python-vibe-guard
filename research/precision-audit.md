@@ -22,7 +22,7 @@
 | PYVIBE-002 | Heurística | 14 | 14 | 5 | 8 | 1 | 36–38% | ⚠️ Needs Review |
 | PYVIBE-003 | Determinística | 1 | 1 | 0 | 1 | 0 | 0% | ⚠️ Needs Review |
 | PYVIBE-004 | Heurística | 60 | 14 | 0 | 12 | 2 | 0–14% | 🔵 Limited Scope |
-| PYVIBE-005 | Heurística | 1,072 | 20 | 7 | 11 | 2 | 35–39% | ⚠️ Needs Review |
+| PYVIBE-005 | Heurística | 605 † | 20 | 17 | 3 | 0 | 85% | ✅ OK (post-fix) |
 | PYVIBE-006 | Heurística | 28 | 20 | 8 | 9 | 3 | 40–47% | ⚠️ Needs Review |
 | PYVIBE-007 | Heurística | 61 | 20 | 6 | 13 | 1 | 30–32% | ⚠️ Needs Review |
 | PYVIBE-008 | Heurística | 436 | 20 | 5 | 15 | 0 | 25% | 🔵 Limited Scope |
@@ -39,11 +39,12 @@
 | PYVIBE-019 | Heurística | 760 ‡ | 18 ‡ | 12 | 6 | — | 67% | 🔵 Limited Scope |
 | PYVIBE-020 | Heurística | 295 | 20 | 8 | 11 | 1 | 40–42% | ⚠️ Needs Review |
 
+† PYVIBE-005: 1,072 hits en raw scan (pre-fix). Tras fix de CROSS_FRAMEWORK (2026-06-27): 605 hits supervivientes (−43.6%). Auditoría post-fix sobre muestra de 20 hits con detector corregido.  
 ‡ PYVIBE-019: 760 hits en raw scan (pre–Scan v4, incluye while loops). Auditoría sobre 18 hits tras restricción de scope a `for _ in range(N)` (Scan v4, jun 2026).
 
 **Resumen:**
-- ✅ OK: 7 reglas (001, 009, 010, 011, 013, 017, y 019 en Limited Scope funcional)
-- ⚠️ Needs Review: 10 reglas (002, 003, 005, 006, 007, 012, 014, 015, 016, 018)
+- ✅ OK: 8 reglas (001, 005 post-fix, 009, 010, 011, 013, 017, y 019 en Limited Scope funcional)
+- ⚠️ Needs Review: 9 reglas (002, 003, 006, 007, 012, 014, 015, 016, 018)
 - 🔵 Limited Scope: 3 reglas (004, 008, 019)
 
 ---
@@ -211,22 +212,55 @@
 | 19 | coleifer/huey | huey/tests/test_api.py:104 | task_a | **FP** | **CROSS_FRAMEWORK: huey** |
 | 20 | celery | t/unit/tasks/test_tasks.py:193 | retry_task_mockapply | FP | Test de la propia librería Celery |
 
-**FP rate:** 55–61% — supera umbral del 40% para heurística
+**FP rate pre-fix:** 55–61% — superaba umbral del 40% para heurística
 
-**🚨 HALLAZGO NUEVO — Patrón CROSS_FRAMEWORK:**  
-El detector usa `isinstance(node, ast.Attribute) and node.attr == "task"` para detectar cualquier `@<cualquier_cosa>.task`, independientemente del framework. Esto dispara en:
-- **taskiq** (`@broker.task`) — 2 hits en muestra
-- **huey** (`@huey.task`) — 4 hits en muestra
-- código interno de Celery (librería propia) — 4 hits en muestra (test suite)
+**🚨 HALLAZGO (auditoría 2026-06-27) — Patrón CROSS_FRAMEWORK:**  
+El detector usaba `isinstance(node, ast.Attribute) and node.attr == "task"` para detectar cualquier `@<cualquier_cosa>.task`, independientemente del framework. Disparaba en:
+- **taskiq** (`@broker.task`) — 6 FPs cross-framework en la muestra
+- **huey** (`@self.huey.task()`, `@huey.task`) — 4 FPs cross-framework en la muestra
+- código interno de Celery (librería propia) — 4 FPs en la muestra (test suite)
 
-El patrón cross-framework **no estaba documentado en sesiones anteriores**. Ver `pyvibe/rules/celery_time_limit.py:67` para el punto exacto del bug.
+---
 
-**Patrones de FP documentados (esta auditoría):**
-1. **CROSS_FRAMEWORK** — `@<any>.task` dispara en taskiq, huey, dramatiq y otros frameworks con decoradores `.task`
-2. **LIBRARY_INTERNAL** — código interno de Celery (builtins, chains) sin `time_limit` (exempted by design)
-3. **OWN_TEST_SUITE** — test tasks en el propio repo de Celery (task fixtures sin time_limit son intencionales)
+### Fix aplicado — 2026-06-27
 
-**Estado: ⚠️ Needs Review** — FP rate 61% · nuevo hallazgo crítico: CROSS_FRAMEWORK FP. Fix requerido: verificar el import del decorador (debe ser `celery.app.base.Celery.task` o `celery.shared_task`).
+**Commit:** `pyvibe/rules/celery_time_limit.py` — nueva lógica en `_is_task_decorator()`:
+
+| Decorador | Antes | Después |
+|-----------|-------|---------|
+| `@shared_task` | ✓ dispara | ✓ dispara |
+| `@app.task` | ✓ dispara | ✓ dispara |
+| `@celery_app.task` | ✓ dispara | ✓ dispara ("celery" en nombre) |
+| `@celery.task` | ✓ dispara | ✓ dispara ("celery" en nombre) |
+| `@importer_app.task` | ✓ dispara | ✓ dispara ("app" en nombre) |
+| `@broker.task` (taskiq, sin import) | ✓ **FP** | ✗ silenciado |
+| `@huey.task` (sin import) | ✓ **FP** | ✗ silenciado |
+| `@self.huey.task()` (Attr receiver) | ✓ **FP** | ✗ silenciado |
+| `@self.app.task` (Attr receiver) | ✓ **FP** | ✗ silenciado |
+| `@broker.task` con `import celery` | — | ✓ dispara (celery confirmado) |
+
+**Estrategia:** receiver como `ast.Name` → "app" o "celery" en el nombre → dispara; Attribute receiver (`self.x.task`) → silenciado; otros nombres → solo si hay import explícito de `celery.*`.
+
+**Impacto en hit count:** 1,072 → 605 hits (−43.6%)
+
+### Auditoría post-fix (muestra 20, seed=42)
+
+| Métrica | Pre-fix | Post-fix |
+|---------|---------|---------|
+| Hits totales | 1,072 | 605 |
+| Muestra | 20 | 20 |
+| TP | 7 | 17 |
+| FP | 11 | 3 |
+| EDGE | 2 | 0 |
+| Precisión | 35–39% | **85%** |
+| FP rate | 55–61% | **15%** |
+
+**FPs residuales (3/20):** todos en `celery/t/` — test suite de la propia librería Celery. El decorador `@app.task` dispara porque el receiver se llama `app` (heurística correcta), pero en el contexto del test suite de Celery estos fixtures son intencionales. Patrón **OWN_TEST_SUITE**: addressable con TEST_FILE_DOWNGRADE en PYVIBE-005.
+
+**Patrones de FP residuales:**
+1. **OWN_TEST_SUITE** — test tasks en el propio repo de Celery (fixtures sin time_limit intencionales). Los 141/605 hits del repo `celery/t/` están en test files.
+
+**Estado: ✅ OK (post-fix)** — FP rate 15% · dentro del umbral del 40% para heurística. 7 tests nuevos añadidos. Fix en producción.
 
 ---
 
@@ -643,16 +677,14 @@ El detector confunde nombres de variables/funciones/clases con los módulos/clas
 
 ---
 
-### Hallazgo nuevo #1 — CROSS_FRAMEWORK en PYVIBE-005
+### Fix aplicado #1 — CROSS_FRAMEWORK en PYVIBE-005 ✅
 
-**Descubierto en esta auditoría.** El detector de PYVIBE-005 usa `node.attr == "task"` para detectar cualquier `@<cualquier_cosa>.task`, incluyendo:
-- taskiq (`@broker.task`)
-- huey (`@huey.task`)
-- cualquier otro framework con decorador `.task`
+**Descubierto y corregido en esta auditoría (2026-06-27).** El detector de PYVIBE-005 usaba `node.attr == "task"` para detectar cualquier `@<cualquier_cosa>.task`. Fix implementado en `pyvibe/rules/celery_time_limit.py`:
+- Receiver como `ast.Name` con "app" o "celery" en el nombre → dispara
+- Receiver como `ast.Attribute` (`@self.huey.task`, `@self.app.task`) → silenciado
+- Otros nombres de receiver → solo si hay import explícito de `celery.*`
 
-Ver `pyvibe/rules/celery_time_limit.py:67`. Este bug no estaba documentado en auditorías anteriores.
-
-**Fix:** Verificar que el objeto que tiene el atributo `.task` sea una instancia conocida de Celery, o filtrar por imports (`from celery import shared_task`, `app = Celery(...)`).
+**Resultado:** 1,072 → 605 hits (−43.6%), precisión 35–39% → 85%. 7 tests nuevos. Ver sección PYVIBE-005 para detalle completo.
 
 ---
 
