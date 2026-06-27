@@ -31,6 +31,12 @@ class AsyncioRunRule(ast.NodeVisitor):
         self.generic_visit(node)
         self._current_async_func = previous
 
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        previous = self._current_async_func
+        self._current_async_func = None
+        self.generic_visit(node)
+        self._current_async_func = previous
+
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:
             self.generic_visit(node)

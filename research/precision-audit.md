@@ -20,7 +20,7 @@
 |-------|-----------|-----:|----------:|---:|---:|-----:|-----------|--------|
 | PYVIBE-001 | Determinística | 87 | 20 | 14 | 0 | 6 | ≥70% (100% excl. EDGE) | ✅ OK |
 | PYVIBE-002 | Heurística | 14 | 14 | 5 | 8 | 1 | 36–38% | ⚠️ Needs Review |
-| PYVIBE-003 | Determinística | 1 | 1 | 0 | 1 | 0 | 0% | ⚠️ Needs Review |
+| PYVIBE-003 | Determinística | 1 | 1 | 1 | 0 | 0 | 100% | ✅ OK (audit revisado — test_batch es async def) |
 | PYVIBE-004 | Heurística | 60 | 14 | 0 | 12 | 2 | 0–14% | 🔵 Limited Scope |
 | PYVIBE-005 | Heurística | 605 † | 15 | 12 | 2 | 1 | 86% | ✅ OK (post-fix + TEST_FILE_DOWNGRADE) |
 | PYVIBE-006 | Heurística | 28 | 20 | 8 | 9 | 3 | 40–47% | ⚠️ Needs Review |
@@ -32,19 +32,20 @@
 | PYVIBE-012 | Heurística | 135 | 20 | 8 | 8 | 4 | 40–50% | ⚠️ Needs Review |
 | PYVIBE-013 | Determinística | 1,095 | corpus | ~1,095 | 0 | — | ~100% | ✅ OK |
 | PYVIBE-014 | Heurística | 33 | 20 | 11 | 8 | 1 | 55–58% | ⚠️ Needs Review |
-| PYVIBE-015 | Determinística | 8 | 8 | 4 | 3 | 1 | 50–57% | ⚠️ Needs Review |
+| PYVIBE-015 | Determinística | 2 § | 2 | 1 | 0 | 1 | 100% | ✅ OK (post INNER_SYNC_FUNCTION fix) |
 | PYVIBE-016 | Heurística | 2 | 2 | 0 | 2 | 0 | 0% | ⚠️ Needs Review |
 | PYVIBE-017 | Determinística | 2,510 | corpus | 2,313 | 197 | — | 92.2% | ✅ OK |
-| PYVIBE-018 | Heurística | 49 | 20 | 5 | 10 | 5 | 33–50% | ⚠️ Needs Review |
+| PYVIBE-018 | Heurística | 37 § | 15 | 4 | 1 | 10 | 80% | ✅ OK (post INNER_SYNC_FUNCTION fix) |
 | PYVIBE-019 | Heurística | 760 ‡ | 18 ‡ | 12 | 6 | — | 67% | 🔵 Limited Scope |
 | PYVIBE-020 | Heurística | 295 | 20 | 8 | 11 | 1 | 40–42% | ⚠️ Needs Review |
 
 † PYVIBE-005: 1,072 hits en raw scan (pre-fix). Tras fix de CROSS_FRAMEWORK (2026-06-27): 605 hits (−43.6%); 571 CRITICAL + 34 WARNING tras TEST_FILE_DOWNGRADE. Auditoría final: 15 hits CRITICAL, 12 TP, 2 FP, 1 EDGE → 86%.  
-‡ PYVIBE-019: 760 hits en raw scan (pre–Scan v4, incluye while loops). Auditoría sobre 18 hits tras restricción de scope a `for _ in range(N)` (Scan v4, jun 2026).
+‡ PYVIBE-019: 760 hits en raw scan (pre–Scan v4, incluye while loops). Auditoría sobre 18 hits tras restricción de scope a `for _ in range(N)` (Scan v4, jun 2026).  
+§ PYVIBE-015/018: hits post INNER_SYNC_FUNCTION fix (2026-06-27). PYVIBE-015: 8→2 (−75%), PYVIBE-018: 49→37 (−24.5%). Ver sección "Fix aplicado #3".
 
 **Resumen:**
-- ✅ OK: 8 reglas (001, 005 post-fix+TEST_FILE_DOWNGRADE, 009, 010, 011, 013, 017, y 019 en Limited Scope funcional)
-- ⚠️ Needs Review: 9 reglas (002, 003, 006, 007, 012, 014, 015, 016, 018)
+- ✅ OK: 11 reglas (001, 003 ✓revisado, 005 post-fix, 009, 010, 011, 013, 015 post-fix, 017, 018 post-fix, y 019 en Limited Scope funcional)
+- ⚠️ Needs Review: 6 reglas (002, 006, 007, 012, 014, 016)
 - 🔵 Limited Scope: 3 reglas (004, 008, 019)
 
 ---
@@ -745,6 +746,65 @@ TEST_FILE_DOWNGRADE activo en: **PYVIBE-001, PYVIBE-005, PYVIBE-007, PYVIBE-009,
 - PYVIBE-016 (+40pp estimado) — podría llevarla a OK
 - PYVIBE-018 (+15pp estimado)
 
+### Fix aplicado #3 — INNER_SYNC_FUNCTION bug en PYVIBE-003, 015, 018 (2026-06-27)
+
+**Bug:** Los detectores de 003, 015 y 018 tenían `visit_AsyncFunctionDef` pero no `visit_FunctionDef`. Esto causaba que `_current_async_func` permaneciera activo al entrar en una función `def` síncrona anidada dentro de un `async def`, disparando FPs.
+
+**Patrón FP eliminado:**
+```python
+async def outer():
+    def sync_helper():
+        asyncio.run(...)          # FP — en contexto síncrono
+        loop.run_until_complete(...)  # FP
+        while True: process()     # FP — sync loop no necesita await
+    sync_helper()
+```
+
+**Fix:** `visit_FunctionDef` añadido a los tres detectores (`asyncio_run.py`, `loop_run_until_complete.py`, `while_true_no_await.py`) que resetea `_current_async_func = None` al entrar en el scope síncrono.
+
+**Impacto medido:**
+
+| Regla | Hits pre-fix | Hits post-fix | Reducción | Precisión pre | Precisión post |
+|-------|-------------|--------------|-----------|---------------|----------------|
+| PYVIBE-003 | 1 | 1 | 0% | 0%* | **100%** |
+| PYVIBE-015 | 8 | 2 | −75% | 57% | **100%** |
+| PYVIBE-018 | 49 | 37 | −24.5% | 33–50% | **80%** |
+
+*PYVIBE-003: el audit original clasificó el único hit como FP por error — `test_batch` ES `async def`. Revisado: es TP.
+
+**Nota:** El fix puede perder TPs donde una sync helper es llamada desde async context. Esos casos requieren análisis de call-graph, fuera del scope del AST. La reducción de FPs compensa la pérdida de TPs dado el objetivo de precisión.
+
+**Tests añadidos:** 4 nuevos tests (test_003_no_fp_sync_nested_inside_async, test_015_no_fp_sync_nested_inside_async, test_018_no_fp_sync_nested_inside_async, test_018_still_detects_while_true_directly_in_async).
+
+**Re-auditoría PYVIBE-003 (1 hit superviviente):**
+
+| # | Repo | File | Función | Clasificación | Razón |
+|---|------|------|---------|---------------|-------|
+| 1 | piccolo-orm/piccolo | tests/table/test_batch.py:129 | test_batch | **TP** | `async def test_batch` llama `asyncio.run()` — RuntimeError en runtime |
+
+**Re-auditoría PYVIBE-015 (2 hits supervivientes):**
+
+| # | Repo | File | Función | Clasificación | Razón |
+|---|------|------|---------|---------------|-------|
+| 1 | aio-libs/aiomysql | tests/sa/test_sa_transaction.py:21 | wrapper | **TP** | `run_until_complete` dentro de `async def wrapper`, event loop ya running |
+| 2 | mongodb/motor | test/asyncio_tests/test_asyncio_basic.py:164 | test_executor_reset | **EDGE** | Llamada en child process post-fork con loop reseteado — patrón válido pero detector no distingue |
+
+**Re-auditoría PYVIBE-018 (15/37 hits, seed=42):**
+
+| # | Repo | Función | Clasificación | Razón |
+|---|------|---------|---------------|-------|
+| 01 | devpush/github.py | get_user_installations | **TP** | `while True: httpx.get(...)` — paginación HTTP sync en async def |
+| 02 | SurfSense/slack_history.py | get_user_info | **EDGE** | while True con retry en async — contexto insuficiente para determinar si hay await |
+| 03-05,07,09,13,14 | home-assistant/core | test_setting_rising | **EDGE** | `while True: astral.sun.dawn(...)` — cálculo astronómico hasta fecha futura; CPU puro breve con break |
+| 06 | devpush/github.py | get_installation_repositories_for_user | **TP** | `while True: httpx.get(...)` — paginación HTTP sync |
+| 08 | vllm_mlx/engine_core.py | generate | **TP** | `while True: collector.get_nowait()` — spin-poll sin await |
+| 10 | plastic-labs/harness.py | run | **EDGE** | Monitoring loop en test harness |
+| 11 | aiokafka/test_producer.py | test_producer_send_batch | **FP** | `while True: batch.append()` — rellena batch hasta lleno, terminación garantizada |
+| 12 | aiomysql/connection.py | _execute_command | **TP** | `while True: write_packet(...)` — chunks síncronos sin yield en async |
+| 15 | aiofiles/test_binary.py | test_staggered_read | **EDGE** | `while True: f.read(1)` — lectura sync en test async |
+
+**Total:** 4 TP, 1 FP, 10 EDGE → **80% precisión** (4/5 sin EDGE) · supera umbral 60% heurística → ✅ OK.
+
 ---
 
 ## Mapa de acción prioritaria
@@ -753,9 +813,9 @@ TEST_FILE_DOWNGRADE activo en: **PYVIBE-001, PYVIBE-005, PYVIBE-007, PYVIBE-009,
 |-----------|--------|-----------------|--------|
 | P0 | ~~Fix CROSS_FRAMEWORK en PYVIBE-005~~ | 005 | **✅ DONE (2026-06-27)** |
 | P0 | ~~Extender TEST_FILE_DOWNGRADE a PYVIBE-005~~ | 005 | **✅ DONE (2026-06-27)** |
-| P0 | Fix INNER_SYNC_FUNCTION (verificar ancestro inmediato) | 003, 015, 018 | Pendiente |
+| P0 | ~~Fix INNER_SYNC_FUNCTION (visit_FunctionDef)~~ | 003, 015, 018 | **✅ DONE (2026-06-27)** |
 | P1 | Fix NAME_COLLISION (rastrear imports, verificar módulo origen) | 002, 004, 008 | Pendiente |
-| P1 | Extender TEST_FILE_DOWNGRADE | 002, 012, 014, 016, 018 | Pendiente |
+| P1 | Extender TEST_FILE_DOWNGRADE | 002, 012, 014, 016 | Pendiente |
 | P2 | Análisis de flujo para ContextVar reset() | 006 | Pendiente |
 | P2 | Análisis de maxsize para Queue.put_nowait() | 020 | Pendiente |
 | P3 | Rastrear referencia a create_task/ensure_future | 012, 014 | Pendiente |

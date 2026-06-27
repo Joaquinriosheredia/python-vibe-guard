@@ -103,6 +103,21 @@ def main():
     assert len(violations) == 0
 
 
+def test_003_no_fp_sync_nested_inside_async():
+    # asyncio.run() in a sync function nested inside async def must NOT fire:
+    # the sync boundary means the call is not directly inside the async context
+    src = """
+import asyncio
+
+async def outer():
+    def sync_bridge():
+        asyncio.run(inner_coro())
+    sync_bridge()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-003"]
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-004 ──────────────────────────────────────────────────────────────
 
 def test_004_detects_threading_lock_in_async():
@@ -890,6 +905,22 @@ async def handler():
     assert violations[0].rule_id == "PYVIBE-015"
 
 
+def test_015_no_fp_sync_nested_inside_async():
+    # loop.run_until_complete() in a sync function nested inside async def must
+    # NOT fire — the sync boundary means the caller is no longer in async context
+    src = """
+import asyncio
+
+async def handler():
+    def legacy_sync_call():
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(fetch())
+    legacy_sync_call()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-015"]
+    assert len(violations) == 0
+
+
 # ─── PYVIBE-016 ──────────────────────────────────────────────────────────────
 
 def test_016_detects_httpx_client_in_async():
@@ -1433,6 +1464,32 @@ async def outer():
     violations = analyze_source(src)
     v018 = [v for v in violations if v.rule_id == "PYVIBE-018"]
     assert len(v018) == 1
+
+
+def test_018_no_fp_sync_nested_inside_async():
+    # while True inside a sync function nested in async def must NOT fire:
+    # a sync function doesn't need await points — only async def does
+    src = """
+async def manager():
+    def sync_processor(queue):
+        while True:
+            item = queue.get()
+            process(item)
+    sync_processor(work_queue)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-018"]
+    assert len(violations) == 0
+
+
+def test_018_still_detects_while_true_directly_in_async():
+    # confirm the TP case still fires after the fix
+    src = """
+async def worker():
+    while True:
+        do_work()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-018"]
+    assert len(violations) == 1
 
 
 # ─── PYVIBE-019: retry loop without backoff ──────────────────────────────────
