@@ -1,5 +1,5 @@
 import ast
-from typing import List
+from typing import List, Set
 from pyvibe.rules.base import Violation
 
 
@@ -20,6 +20,23 @@ class SqliteAsyncRule(ast.NodeVisitor):
     def __init__(self):
         self.violations: List[Violation] = []
         self._current_async_func: str = None
+        # Names bound to the `sqlite3` module via `import sqlite3 [as X]`
+        self._sqlite3_aliases: Set[str] = set()
+        # Names imported directly from sqlite3: `from sqlite3 import connect`
+        self._from_sqlite3: Set[str] = set()
+
+    def visit_Import(self, node: ast.Import):
+        for alias in node.names:
+            if alias.name == "sqlite3":
+                self._sqlite3_aliases.add(alias.asname if alias.asname else alias.name)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        if node.module == "sqlite3":
+            for alias in node.names:
+                if alias.name == "connect":
+                    self._from_sqlite3.add(alias.asname if alias.asname else alias.name)
+        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         previous = self._current_async_func
@@ -46,16 +63,27 @@ class SqliteAsyncRule(ast.NodeVisitor):
 
     def _is_sqlite_connect(self, node: ast.Call) -> bool:
         # sqlite3.connect(...)
+        # Guard against NAME_COLLISION: only flag when the receiver name is
+        # known to be bound to the sqlite3 module via an import statement.
+        # Without this, any `obj.connect(...)` where the variable happens to
+        # be named `sqlite3` would be a false positive.
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr == "connect"
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "sqlite3"
+            and node.func.value.id in self._sqlite3_aliases
         ):
             return True
 
         # from sqlite3 import connect → connect(...)
-        if isinstance(node.func, ast.Name) and node.func.id == "connect":
+        # Guard against NAME_COLLISION: bare `connect()` is an extremely common
+        # name used by asyncpg, aiomysql, aiopg, websockets, aio-pika, asyncssh,
+        # and many other async libraries. Only flag when `connect` was explicitly
+        # imported from sqlite3 (a rare but real pattern: `from sqlite3 import connect`).
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in self._from_sqlite3
+        ):
             return True
 
         return False

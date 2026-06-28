@@ -1974,6 +1974,206 @@ async def producer(queue, item):
     assert not any(v.rule_id == "PYVIBE-020" for v in violations)
 
 
+# ─── NAME_COLLISION fixes: PYVIBE-002, PYVIBE-004, PYVIBE-008 ────────────────
+
+# PYVIBE-002: local variable named "requests" is not the requests module
+
+def test_002_no_fp_name_collision_local_variable():
+    # `requests` here is a local variable (a list), not the requests module.
+    # Without import tracking this was a false positive: requests.get(key) would
+    # look like requests.get("https://...") textually.
+    src = """
+async def process():
+    requests = get_pending_requests()
+    first = requests[0]
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_no_fp_no_import_requests():
+    # requests.get() used without any `import requests` in the file — the name
+    # `requests` is some other object (e.g. a django QuerySet or a parameter).
+    src = """
+async def handler(requests):
+    return requests.get("key", None)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_still_detects_with_alias():
+    # `import requests as req` — alias must still be flagged.
+    src = """
+import requests as req
+async def fetch():
+    return req.get("https://example.com")
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 1
+
+
+# PYVIBE-004: bare Lock()/Semaphore() from anyio/asyncio/custom modules
+
+def test_004_no_fp_anyio_lock():
+    # anyio.Lock() is async-compatible. When imported as bare `Lock` without
+    # a `from threading import Lock` statement it must not be flagged.
+    src = """
+from anyio import Lock
+
+async def handler():
+    lock = Lock()
+    async with lock:
+        pass
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-004"]
+    assert len(violations) == 0
+
+
+def test_004_no_fp_custom_lock_class():
+    # A custom Lock model (e.g. an ORM document named Lock) must not be flagged
+    # even though the bare name matches the threading primitive set.
+    src = """
+from myapp.models import Lock
+
+async def create_lock():
+    lock = Lock(k=1)
+    await lock.save()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-004"]
+    assert len(violations) == 0
+
+
+def test_004_no_fp_asyncio_semaphore_bare():
+    # asyncio.Semaphore imported as bare Semaphore — must not be flagged.
+    src = """
+from asyncio import Semaphore, gather, create_task
+
+async def limited():
+    sem = Semaphore(10)
+    async with sem:
+        pass
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-004"]
+    assert len(violations) == 0
+
+
+def test_004_still_detects_from_threading_import_lock():
+    # Explicit `from threading import Lock` — bare Lock() must still fire.
+    src = """
+from threading import Lock
+
+async def handler():
+    lock = Lock()
+    lock.acquire()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-004"]
+    assert len(violations) == 1
+
+
+def test_004_still_detects_threading_alias():
+    # `import threading as t` — t.Lock() must still fire.
+    src = """
+import threading as t
+
+async def handler():
+    lock = t.Lock()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-004"]
+    assert len(violations) == 1
+
+
+# PYVIBE-008: bare connect() from asyncpg, aiomysql, websockets, etc.
+
+def test_008_no_fp_asyncpg_connect_bare():
+    # asyncpg.connect() used as a bare name parameter — must not be flagged.
+    src = """
+import asyncpg
+
+async def _run(connect, host):
+    conn = await connect(host=host)
+    return conn
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 0
+
+
+def test_008_no_fp_aiomysql_connect():
+    # aiomysql.connect() imported as bare `connect` — must not be flagged.
+    src = """
+from aiomysql import connect
+
+async def get_pool():
+    conn = await connect(host="localhost", db="test")
+    return conn
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 0
+
+
+def test_008_no_fp_websockets_connect():
+    # websockets.connect() used as a bare name — must not be flagged.
+    src = """
+from websockets import connect
+
+async def ws_client():
+    async with connect("ws://localhost:8765") as ws:
+        await ws.send("hello")
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 0
+
+
+def test_008_no_fp_nats_connect():
+    # nats.connect() — must not be flagged (no sqlite3 import).
+    src = """
+from nats.aio.client import Client as NATS
+
+async def main():
+    nc = NATS()
+    await nc.connect("nats://127.0.0.1:4222")
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 0
+
+
+def test_008_no_fp_connect_as_function_parameter():
+    # `connect` as a parameter name (asyncpg test pattern) — must not be flagged.
+    src = """
+async def _run_connection_test(self, connect, target):
+    conn = await connect(target_session_attrs=target)
+    await conn.close()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 0
+
+
+def test_008_still_detects_from_sqlite3_import_connect():
+    # `from sqlite3 import connect` — bare connect() must still fire.
+    src = """
+from sqlite3 import connect
+
+async def get_users():
+    conn = connect("db.sqlite3")
+    return conn.cursor().fetchall()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 1
+
+
+def test_008_still_detects_sqlite3_alias():
+    # `import sqlite3 as db` — db.connect() must still fire.
+    src = """
+import sqlite3 as db
+
+async def get_users():
+    conn = db.connect("mydb.sqlite3")
+    return conn.cursor().fetchall()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-008"]
+    assert len(violations) == 1
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     passed = failed = 0

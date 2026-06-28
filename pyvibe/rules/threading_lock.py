@@ -1,5 +1,5 @@
 import ast
-from typing import List
+from typing import List, Set
 from pyvibe.rules.base import Violation
 
 # threading.Event is a signalling primitive (set/wait), not a lock — it does not
@@ -29,6 +29,23 @@ class ThreadingLockRule(ast.NodeVisitor):
     def __init__(self):
         self.violations: List[Violation] = []
         self._current_async_func: str = None
+        # Names bound to the `threading` module via `import threading [as X]`
+        self._threading_aliases: Set[str] = set()
+        # Names imported directly from threading: `from threading import Lock`
+        self._from_threading: Set[str] = set()
+
+    def visit_Import(self, node: ast.Import):
+        for alias in node.names:
+            if alias.name == "threading":
+                self._threading_aliases.add(alias.asname if alias.asname else alias.name)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        if node.module == "threading":
+            for alias in node.names:
+                if alias.name in THREADING_PRIMITIVES:
+                    self._from_threading.add(alias.asname if alias.asname else alias.name)
+        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         previous = self._current_async_func
@@ -56,16 +73,24 @@ class ThreadingLockRule(ast.NodeVisitor):
 
     def _get_threading_primitive(self, node: ast.Call):
         # threading.Lock(), threading.RLock(), etc.
+        # Guard against NAME_COLLISION: only flag when the receiver is known to
+        # be bound to the `threading` module via an import statement.
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr in THREADING_PRIMITIVES
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "threading"
+            and node.func.value.id in self._threading_aliases
         ):
             return node.func.attr
 
         # from threading import Lock → Lock()
-        if isinstance(node.func, ast.Name) and node.func.id in THREADING_PRIMITIVES:
+        # Guard against NAME_COLLISION: bare names only fire when the name was
+        # explicitly imported from threading (e.g. anyio.Lock or a custom Lock
+        # class would not be in _from_threading and are correctly skipped).
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in self._from_threading
+        ):
             return node.func.id
 
         return None

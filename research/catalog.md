@@ -1,7 +1,7 @@
 # python-vibe-guard — Catálogo de Reglas
 
-**Versión:** 0.7.3 · 20 reglas activas · 158 tests  
-**Última actualización:** 2026-06-27  
+**Versión:** 0.7.3 · 20 reglas activas · 173 tests  
+**Última actualización:** 2026-06-28  
 **Fuente de datos:** sweep 250 repos (95,678 .py files) · `research/datasets/250-repos.json`
 
 ---
@@ -49,13 +49,13 @@ Leyenda columna Recomendación:
 | Regla | Categoría | Evidence | Recomendación | Detection | Runtime Impact | External Evidence | Repos 250 | Estado |
 |-------|-----------|----------|--------------|-----------|----------------|-------------------|-----------|--------|
 | [PYVIBE-001](accepted/PYVIBE-001.md) — `time.sleep()` en async def | Bloqueo de event loop | **A+** | CRITICAL ¹ | High | High | High | 12.4% (31/250) | ✅ Protocolo v1 |
-| [PYVIBE-002](accepted/PYVIBE-002.md) — `requests` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 4.0% (10/250) | ✅ Precisión auditada · 36% TP (5/14) · FP: executor_wrap, var_collision |
+| [PYVIBE-002](accepted/PYVIBE-002.md) — `requests` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 3.2% (8/250) ★ | ✅ Precisión auditada · ~50% TP post NAME_COLLISION fix (11 hits, −21%) · FP residual: executor_wrap, test_subject |
 | [PYVIBE-003](accepted/PYVIBE-003.md) — `asyncio.run()` dentro de async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 0.4% (1/250) | ✅ Precisión revisada · 100% TP (1/1) · audit anterior era incorrecto (test_batch es async def) |
-| [PYVIBE-004](accepted/PYVIBE-004.md) — `threading.Lock()` en async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 2.0% (5/250) | 🔵 Limited Scope · 0% TP (0/14) · FP crítico: async Lock name collision |
+| [PYVIBE-004](accepted/PYVIBE-004.md) — `threading.Lock()` en async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 1.2% (3/250) ★ | ✅ Precisión auditada · ~83% TP post NAME_COLLISION fix (6 hits, −90%) · fix: rastrear imports threading |
 | [PYVIBE-005](accepted/PYVIBE-005.md) — Celery task sin `time_limit` | Resiliencia | **A** | CRITICAL/WARNING† | Medium-High | High | Medium-High | 12.8% (32/250) | ✅ Precisión auditada · 86% TP post-fix+TEST_FILE_DOWNGRADE · 571 CRITICAL + 34 WARNING |
 | [PYVIBE-006](accepted/PYVIBE-006.md) — `ContextVar` sin `reset()` | Estado / Contexto | B | CRITICAL | — | — | — | 6.0% (15/250) | ✅ Precisión auditada · 40% TP (8/20) · FP: task isolation, test subjects |
 | [PYVIBE-007](accepted/PYVIBE-007.md) — `subprocess.run` en async def | Bloqueo de event loop | B | CRITICAL ¹ | — | — | — | 4.8% (12/250) | ✅ Precisión auditada · 30% TP (6/20) · FP: test launchers, executor wrap |
-| [PYVIBE-008](accepted/PYVIBE-008.md) — `sqlite3` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 8.8% (22/250) | 🔵 Limited Scope · 25% TP (5/20) · FP crítico: connect() name collision |
+| [PYVIBE-008](accepted/PYVIBE-008.md) — `sqlite3` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 2.8% (7/250) ★ | ✅ Precisión auditada · ~85–90% TP post NAME_COLLISION fix (41 hits, −91%) · fix: rastrear imports sqlite3 |
 | [PYVIBE-009](accepted/PYVIBE-009.md) — `open()` en lugar de `aiofiles` | Bloqueo de event loop | **B** | CRITICAL (hot path) ¹ | High | Medium-High | Medium | 24.0% (60/250) | ✅ Protocolo v1 |
 | [PYVIBE-010](accepted/PYVIBE-010.md) — `httpx.get/post` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.8% (2/250) | ✅ Precisión auditada · 88% TP (15/17) · FP: benchmark script |
 | [PYVIBE-011](accepted/PYVIBE-011.md) — `os.blocking` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.0% (0/250) ² | ✅ Precisión auditada · N/A (0 hits) |
@@ -70,7 +70,8 @@ Leyenda columna Recomendación:
 | [PYVIBE-020](accepted/PYVIBE-020.md) — `put_nowait()` sin handler `QueueFull` | Manejo de errores | B | WARNING | — | — | — | 16.4% (41/250) ³ | ✅ Precisión auditada · 40% TP (8/20) · FP: unbounded queues, pool invariants |
 
 ² PYVIBE-011: 0 hits en 250 repos — Evidence B se mantiene porque el patrón es real aunque infrecuente en repos de alta estrella.  
-³ PYVIBE-020: debut en sweep 250 (sin baseline en 100 repos). Tasa de debut 16.4% es sólida para regla nueva.
+³ PYVIBE-020: debut en sweep 250 (sin baseline en 100 repos). Tasa de debut 16.4% es sólida para regla nueva.  
+★ PYVIBE-002/004/008: repos afectados post NAME_COLLISION fix (2026-06-28). 002: 14→11 hits (−21%), 8 repos. 004: 60→6 hits (−90%), 3 repos. 008: 436→41 hits (−91%), 7 repos. Fix: rastreo de imports en los detectores.
 
 **‡ PYVIBE-019 — Limited Scope (Heurística de intención):**
 - Scope: `for _ in range(N)` / `for attempt in range(N)` en `async def`. While excluido.
@@ -84,6 +85,8 @@ Leyenda columna Recomendación:
 - `except Exception: pass` / `except Exception: ...` → `WARNING`
 - Excepciones específicas (`except ValueError: pass`) → no se flagea
 - `# nosec B110` en la línea del except → suprimido
+
+**Fix #4 — NAME_COLLISION (2026-06-28):** `visit_Import`/`visit_ImportFrom` añadidos a `async_requests.py`, `threading_lock.py`, `sqlite_async.py`. Los detectores ahora verifican que el nombre esté importado del módulo correcto antes de disparar. 452 FPs eliminados, 15 tests nuevos (total 173).
 
 **¹ TEST_FILE_DOWNGRADE activo en:** PYVIBE-001, PYVIBE-007, PYVIBE-009, PYVIBE-013  
 En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNING automáticamente.

@@ -1,5 +1,5 @@
 import ast
-from typing import List
+from typing import List, Set
 from pyvibe.rules.base import Violation
 
 REQUESTS_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "request"}
@@ -22,6 +22,14 @@ class AsyncRequestsRule(ast.NodeVisitor):
     def __init__(self):
         self.violations: List[Violation] = []
         self._current_async_func: str = None
+        # Names bound to the `requests` module via `import requests [as X]`
+        self._requests_aliases: Set[str] = set()
+
+    def visit_Import(self, node: ast.Import):
+        for alias in node.names:
+            if alias.name == "requests":
+                self._requests_aliases.add(alias.asname if alias.asname else alias.name)
+        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         previous = self._current_async_func
@@ -48,14 +56,16 @@ class AsyncRequestsRule(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _get_requests_method(self, node: ast.Call):
-        # requests.get(...), requests.post(...), etc. — qualified form only
-        # Bare names (get, post, request…) excluded: too generic, cause FPs
-        # with aiohttp.request, httpx shortcuts, and other async APIs.
+        # requests.get(...), requests.post(...), etc. — qualified form only.
+        # Guard against NAME_COLLISION: only flag when the receiver name is
+        # known to be bound to the `requests` module via an import statement.
+        # Without this, `requests = get_pending_requests(); requests.get(key)`
+        # (a dict/object .get() call) would be a false positive.
         if (
             isinstance(node.func, ast.Attribute)
             and node.func.attr in REQUESTS_METHODS
             and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "requests"
+            and node.func.value.id in self._requests_aliases
         ):
             return node.func.attr
 
