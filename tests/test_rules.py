@@ -1054,6 +1054,37 @@ def send_invoice(order_id):
     assert v005[0].severity == "CRITICAL"
 
 
+# ─── Fix 5: TEST_FILE_DOWNGRADE extended to PYVIBE-008 ───────────────────────
+
+def test_008_downgraded_to_warning_in_test_file():
+    src = """
+import sqlite3
+
+async def test_repository_integrity():
+    conn = sqlite3.connect(':memory:')
+    conn.execute('CREATE TABLE t (id INTEGER)')
+    conn.close()
+"""
+    violations = analyze_source(src, "tests/test_sqlite_repository.py")
+    v008 = [v for v in violations if v.rule_id == "PYVIBE-008"]
+    assert len(v008) == 1
+    assert v008[0].severity == "WARNING"
+
+
+def test_008_still_critical_in_production_file():
+    src = """
+import sqlite3
+
+async def store_result(data):
+    with sqlite3.connect('results.db') as conn:
+        conn.execute('INSERT INTO results VALUES (?)', (data,))
+"""
+    violations = analyze_source(src, "myapp/storage/results_store.py")
+    v008 = [v for v in violations if v.rule_id == "PYVIBE-008"]
+    assert len(v008) == 1
+    assert v008[0].severity == "CRITICAL"
+
+
 # ─── Fix 2: downgrade_in_tests and skip_test_files API ───────────────────────
 
 def test_downgrade_all_rules_in_test_file():

@@ -1,6 +1,6 @@
 # python-vibe-guard — Catálogo de Reglas
 
-**Versión:** 0.7.3 · 20 reglas activas · 173 tests  
+**Versión:** 0.7.3 · 20 reglas activas · 175 tests  
 **Última actualización:** 2026-06-28  
 **Fuente de datos:** sweep 250 repos (95,678 .py files) · `research/datasets/250-repos.json`
 
@@ -55,7 +55,7 @@ Leyenda columna Recomendación:
 | [PYVIBE-005](accepted/PYVIBE-005.md) — Celery task sin `time_limit` | Resiliencia | **A** | CRITICAL/WARNING† | Medium-High | High | Medium-High | 12.8% (32/250) | ✅ Precisión auditada · 86% TP post-fix+TEST_FILE_DOWNGRADE · 571 CRITICAL + 34 WARNING |
 | [PYVIBE-006](accepted/PYVIBE-006.md) — `ContextVar` sin `reset()` | Estado / Contexto | B | CRITICAL | — | — | — | 6.0% (15/250) | ✅ Precisión auditada · 40% TP (8/20) · FP: task isolation, test subjects |
 | [PYVIBE-007](accepted/PYVIBE-007.md) — `subprocess.run` en async def | Bloqueo de event loop | B | CRITICAL ¹ | — | — | — | 4.8% (12/250) | ✅ Precisión auditada · 30% TP (6/20) · FP: test launchers, executor wrap |
-| [PYVIBE-008](accepted/PYVIBE-008.md) — `sqlite3` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 2.8% (7/250) ★ | ✅ Precisión auditada · ~85–90% TP post NAME_COLLISION fix (41 hits, −91%) · fix: rastrear imports sqlite3 |
+| [PYVIBE-008](accepted/PYVIBE-008.md) — `sqlite3` en async def | Bloqueo de event loop | B | CRITICAL ¹ | — | — | — | 2.8% (7/250) ★ | ✅ Precisión auditada · 100% TP en producción post NAME_COLLISION fix (36 hits, −92%) · 28 test hits → WARNING via TEST_FILE_DOWNGRADE · 8 prod hits: 100% TP |
 | [PYVIBE-009](accepted/PYVIBE-009.md) — `open()` en lugar de `aiofiles` | Bloqueo de event loop | **B** | CRITICAL (hot path) ¹ | High | Medium-High | Medium | 24.0% (60/250) | ✅ Protocolo v1 |
 | [PYVIBE-010](accepted/PYVIBE-010.md) — `httpx.get/post` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.8% (2/250) | ✅ Precisión auditada · 88% TP (15/17) · FP: benchmark script |
 | [PYVIBE-011](accepted/PYVIBE-011.md) — `os.blocking` en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 0.0% (0/250) ² | ✅ Precisión auditada · N/A (0 hits) |
@@ -86,9 +86,11 @@ Leyenda columna Recomendación:
 - Excepciones específicas (`except ValueError: pass`) → no se flagea
 - `# nosec B110` en la línea del except → suprimido
 
-**Fix #4 — NAME_COLLISION (2026-06-28):** `visit_Import`/`visit_ImportFrom` añadidos a `async_requests.py`, `threading_lock.py`, `sqlite_async.py`. Los detectores ahora verifican que el nombre esté importado del módulo correcto antes de disparar. 452 FPs eliminados, 15 tests nuevos (total 173).
+**Fix #4 — NAME_COLLISION (2026-06-28):** `visit_Import`/`visit_ImportFrom` añadidos a `async_requests.py`, `threading_lock.py`, `sqlite_async.py`. Los detectores ahora verifican que el nombre esté importado del módulo correcto antes de disparar. 452 FPs eliminados, 15 tests nuevos.
 
-**¹ TEST_FILE_DOWNGRADE activo en:** PYVIBE-001, PYVIBE-007, PYVIBE-009, PYVIBE-013  
+**Fix #5 — TEST_FILE_DOWNGRADE extendido a PYVIBE-008 (2026-06-28):** Auditoría de 36 hits post-NAME_COLLISION fix: 28 en archivos de test (77.8%), 8 en producción (22.2%). Los 8 hits de producción son 100% TP (IBM mcp-context-forge, kiro-gateway, WebRPA). Los 28 test hits son FP contextuales (test subjects, smoke tests, fixtures). Downgrade CRITICAL→WARNING en test files. 2 tests nuevos (total 175).
+
+**¹ TEST_FILE_DOWNGRADE activo en:** PYVIBE-001, PYVIBE-005, PYVIBE-007, PYVIBE-008, PYVIBE-009, PYVIBE-013  
 En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNING automáticamente.
 
 **PYVIBE-009 contexto adicional:** CRITICAL en hot paths (handlers HTTP/WS); impacto real cero en funciones de startup/lifespan (la app no sirve requests aún). La forma idiomática para startup file I/O es usar `def` en lugar de `async def`, evitando el flag. Ver [`PYVIBE-009.md`](accepted/PYVIBE-009.md) sección "Distinción de contexto".
@@ -136,7 +138,7 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | PYVIBE-005 | 15/571† | 12 | 2 | 1 | **86%** | ✅ **Completa** — 86% post fix+TEST_FILE_DOWNGRADE · 34 hits → WARNING |
 | PYVIBE-006 | 20/28 | 8 | 9 | 3 | 40% | B — mejora context detection |
 | PYVIBE-007 | 20/61 | 6 | 13 | 1 | 30% | B — test_file_downgrade ayuda |
-| PYVIBE-008 | 20/436 | 5 | 15 | 0 | 25% | **🔵 Limited Scope** — connect() collision |
+| PYVIBE-008 | 36/36† | 8 | 28 | 0 | **100% prod** | ✅ **Completa** — 100% TP en producción · TEST_FILE_DOWNGRADE aplicado (28 test hits → WARNING) |
 | PYVIBE-010 | 17/17 | 15 | 1 | 1 | 88% | B — excelente, candidata a A |
 | PYVIBE-011 | 0/0 | 0 | 0 | 0 | N/A | B — mantener, 0 hits |
 | PYVIBE-012 | 20/135 | 8 | 8 | 4 | 40% | B — test_file_downgrade |
@@ -147,7 +149,8 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 | PYVIBE-020 | 20/295 | 8 | 11 | 1 | 40% | B — verificar bounded queue |
 
 † PYVIBE-005: 571 CRITICAL + 34 WARNING (TEST_FILE_DOWNGRADE) = 605 post-fix (1,072 raw − 467 cross-framework). Muestra auditada = 15 hits CRITICAL. Ver `research/precision-audit.md` sección PYVIBE-005.  
-† PYVIBE-015/018: post INNER_SYNC_FUNCTION fix. PYVIBE-015: 8→2 hits (−75%). PYVIBE-018: 49→37 hits (−24.5%).
+† PYVIBE-015/018: post INNER_SYNC_FUNCTION fix. PYVIBE-015: 8→2 hits (−75%). PYVIBE-018: 49→37 hits (−24.5%).  
+† PYVIBE-008: post NAME_COLLISION fix (436→36 hits, −92%). Muestra completa (36/36): 8 prod (100% TP) + 28 test (WARNING via TEST_FILE_DOWNGRADE). Repos prod afectados: IBM/mcp-context-forge, jwadow/kiro-gateway, pmh1314520/WebRPA.
 
 ### Hallazgos transversales críticos
 

@@ -44,6 +44,17 @@ class SqliteAsyncRule(ast.NodeVisitor):
         self.generic_visit(node)
         self._current_async_func = previous
 
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        # A sync `def` nested inside an `async def` creates its own synchronous
+        # scope. sqlite3.connect() inside that scope is NOT blocking the event
+        # loop — if the caller passes the sync function to asyncio.to_thread()
+        # or run_in_executor(), the blocking happens in a thread pool as intended.
+        # Reset async context so inner sync bodies don't inherit it.
+        previous = self._current_async_func
+        self._current_async_func = None
+        self.generic_visit(node)
+        self._current_async_func = previous
+
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:
             self.generic_visit(node)
