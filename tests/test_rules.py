@@ -2044,6 +2044,111 @@ async def fetch():
     assert len(violations) == 1
 
 
+# PYVIBE-002: EXECUTOR_WRAPPER and INNER_SYNC_FUNCTION_EXECUTOR false positives
+
+def test_002_no_fp_run_in_executor_lambda():
+    # requests.get() inside a lambda passed to run_in_executor runs in a thread
+    # pool — it does NOT block the event loop. Must not be flagged.
+    src = """
+import asyncio
+import requests
+
+async def save_images(urls):
+    images = await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: [requests.get(url, stream=True, timeout=10) for url in urls],
+    )
+    return images
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_no_fp_run_in_executor_lambda_simple():
+    # Minimal form: await loop.run_in_executor(None, lambda: requests.post(url, json=data))
+    src = """
+import requests
+
+async def async_process(url, data):
+    loop = __import__('asyncio').get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: requests.post(url, json=data).json()
+    )
+    return result
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_no_fp_inner_sync_def_executor():
+    # requests.get() inside a sync inner def that is passed to async_add_executor_job.
+    # Pattern from home-assistant/core downloader — the request runs in a thread.
+    src = """
+import requests
+
+async def download_file(url, path):
+    def do_download():
+        req = requests.get(url, stream=True, timeout=10)
+        with open(path, 'wb') as f:
+            for chunk in req.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+    await some_hass.async_add_executor_job(do_download)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_no_fp_inner_sync_def_returns_request():
+    # Inner sync def returning a requests.get() result, passed to executor.
+    # Pattern from home-assistant/core xmpp upload — runs in thread pool.
+    src = """
+import requests
+
+async def upload_file_from_url(url, verify=True, timeout=None):
+    def get_url(url):
+        return requests.get(url, verify=verify, timeout=timeout)
+
+    result = await hass.async_add_executor_job(get_url, url)
+    return result
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 0
+
+
+def test_002_still_detects_direct_call_in_async_body():
+    # requests.get() called directly in the async def body (not inside any
+    # inner def or lambda) must still be flagged — this is the real bug.
+    src = """
+import requests
+
+async def fetch_and_process(url):
+    response = requests.get(url)  # blocks event loop — should be flagged
+    return response.json()
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 1
+
+
+def test_002_still_detects_across_multiple_methods():
+    # Multiple async methods each with direct requests.* — all should be flagged.
+    src = """
+import requests
+
+async def get_active(url):
+    return requests.get(url)
+
+async def stop_tunnel(tunnel_url):
+    return requests.delete(tunnel_url)
+
+async def create_tunnel(url, data):
+    return requests.post(url, json=data)
+"""
+    violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-002"]
+    assert len(violations) == 3
+
+
 # PYVIBE-004: bare Lock()/Semaphore() from anyio/asyncio/custom modules
 
 def test_004_no_fp_anyio_lock():

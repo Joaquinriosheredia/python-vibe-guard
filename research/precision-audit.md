@@ -1,6 +1,6 @@
 # python-vibe-guard — Auditoría de Precisión (Sweep 250 repos)
 
-**Versión del catálogo:** 0.7.3  
+**Versión del catálogo:** 0.7.4  
 **Fecha de auditoría:** 2026-06-28 (actualizado)  
 **Dataset:** `research/datasets/250-repos.json` (v0.7.0 · 250 repos · 95,678 archivos .py · 7,106 violaciones brutas)  
 **Método:** Muestra aleatoria de hasta 20 hits por regla (seed=42), clasificación manual hit-by-hit  
@@ -19,7 +19,7 @@
 | Regla | Categoría | Hits | Auditados | TP | FP | EDGE | Precisión | Estado |
 |-------|-----------|-----:|----------:|---:|---:|-----:|-----------|--------|
 | PYVIBE-001 | Determinística | 87 | 20 | 14 | 0 | 6 | ≥70% (100% excl. EDGE) | ✅ OK |
-| PYVIBE-002 | Heurística | 11 ★ | 11 | 5 | 5 | 1 | ~50% | ⚠️ Needs Review (mejora post NAME_COLLISION fix) |
+| PYVIBE-002 | Heurística | 6 ★✦ | 6 | 5 | 1 | 0 | ~83% | ✅ OK (post EXECUTOR_WRAPPER fix) |
 | PYVIBE-003 | Determinística | 1 | 1 | 1 | 0 | 0 | 100% | ✅ OK (audit revisado — test_batch es async def) |
 | PYVIBE-004 | Heurística | 6 ★ | 6 | ~5 | ~1 | 0 | ~83% | ✅ OK (post NAME_COLLISION fix) |
 | PYVIBE-005 | Heurística | 605 † | 15 | 12 | 2 | 1 | 86% | ✅ OK (post-fix + TEST_FILE_DOWNGRADE) |
@@ -42,11 +42,12 @@
 † PYVIBE-005: 1,072 hits en raw scan (pre-fix). Tras fix de CROSS_FRAMEWORK (2026-06-27): 605 hits (−43.6%); 571 CRITICAL + 34 WARNING tras TEST_FILE_DOWNGRADE. Auditoría final: 15 hits CRITICAL, 12 TP, 2 FP, 1 EDGE → 86%.  
 ‡ PYVIBE-019: 760 hits en raw scan (pre–Scan v4, incluye while loops). Auditoría sobre 18 hits tras restricción de scope a `for _ in range(N)` (Scan v4, jun 2026).  
 § PYVIBE-015/018: hits post INNER_SYNC_FUNCTION fix (2026-06-27). PYVIBE-015: 8→2 (−75%), PYVIBE-018: 49→37 (−24.5%). Ver sección "Fix aplicado #3".  
-★ PYVIBE-002/004/008: hits post NAME_COLLISION fix (2026-06-28). 002: 14→11 (−21%); 004: 60→6 (−90%); 008: 436→41 (−91%). Ver sección "Fix aplicado #4".
+★ PYVIBE-002/004/008: hits post NAME_COLLISION fix (2026-06-28). 002: 14→11 (−21%); 004: 60→6 (−90%); 008: 436→41 (−91%). Ver sección "Fix aplicado #4".  
+✦ PYVIBE-002: hits post EXECUTOR_WRAPPER fix (2026-06-28). 002: 11→6 (−45%); precisión ~50%→~83%. Ver sección "Fix aplicado #5".
 
 **Resumen:**
-- ✅ OK: 14 reglas (001, 003 ✓revisado, 004 post-fix, 005 post-fix, 008 post-fix, 009, 010, 011, 013, 015 post-fix, 017, 018 post-fix, 019 en Limited Scope funcional)
-- ⚠️ Needs Review: 5 reglas (002, 006, 007, 012, 014, 016)
+- ✅ OK: 15 reglas (001, 002 post-fix, 003 ✓revisado, 004 post-fix, 005 post-fix, 008 post-fix, 009, 010, 011, 013, 015 post-fix, 017, 018 post-fix, 019 en Limited Scope funcional)
+- ⚠️ Needs Review: 4 reglas (006, 007, 012, 014, 016)
 - 🔵 Limited Scope: 1 regla (019)
 
 ---
@@ -139,6 +140,43 @@ Fix: `visit_Import` rastrea aliases del módulo `requests`; la detección califi
 **Hits supervivientes (11):** todos tienen `import requests` explícito. Los FPs residuales son EXECUTOR_WRAPPER y TEST_SUBJECT — requieren análisis de call-graph para resolver.
 
 **Estado: ⚠️ Needs Review** — precisión ~50%, mejorada desde 36–38%. NAME_COLLISION resuelto. Pendiente: fix EXECUTOR_WRAPPER pattern.
+
+#### Post-fix EXECUTOR_WRAPPER (2026-06-28)
+
+Fix implementado en `pyvibe/rules/async_requests.py`:
+- `visit_FunctionDef`: al entrar en una `def` síncrona anidada dentro de async, resetea `_current_async_func = None` → los `requests.*()` dentro de inner-sync-defs no se flaggean
+- `visit_Lambda`: mismo mecanismo para lambdas → `lambda: requests.post(url, json=data)` pasado a `run_in_executor` no se flaggea
+
+**Razonamiento:** una función `def` o `lambda` anidada dentro de `async def` es callable síncrono. Si se pasa a `run_in_executor` / `async_add_executor_job`, corre en un thread pool y NO bloquea el event loop. Sin call-graph completo no podemos saber si se llama directamente (bug real) o se pasa a executor (OK), así que conservativamente no flaggeamos requests dentro de ningún callable síncrono anidado.
+
+| Métrica | Valor |
+|---------|-------|
+| Hits post-fix EXECUTOR_WRAPPER | 6 |
+| Eliminados | 5 (−45%) · home-assistant×2, xhs_ai_publisher×1, GPTDiscord×1 + 1 previamente contado |
+| Repos afectados | 4 |
+| Precisión | ~83% (5 TP / 6 hits) |
+
+**Hits supervivientes — clasificación hit-by-hit:**
+
+| # | Repo | Archivo | Función | Línea | Clasificación |
+|---|------|---------|---------|-------|---------------|
+| 01 | paulpierre__RasaGPT | app/rasa-credentials/main.py | get_active_tunnels | 65 | TP — `requests.get()` directo en async, sin executor |
+| 02 | paulpierre__RasaGPT | app/rasa-credentials/main.py | stop_tunnel | 78 | TP — `requests.delete()` directo en async, sin executor |
+| 03 | paulpierre__RasaGPT | app/rasa-credentials/main.py | create_tunnel | 118 | TP — `requests.post()` directo en async, sin executor |
+| 04 | bmoscon__cryptofeed | cryptofeed/exchanges/binance.py | _refresh_token | 158 | TP — `requests.put()` directo en async, bloquea loop |
+| 05 | wyeeeee__hajimi | app/utils/version.py | check_version | 23 | TP — `requests.get()` directo en async, sin executor |
+| 06 | pydantic__logfire | tests/otel_integrations/test_requests.py | test_requests_instrumentation | 41 | FP (TEST_SUBJECT) — test verifica `logfire.instrument_requests()`; call es objeto bajo prueba |
+
+**FPs eliminados por este fix:**
+
+| Repo | Archivo | Patrón | Función | Motivo FP |
+|------|---------|--------|---------|-----------|
+| home-assistant__core | components/downloader/services.py | INNER_SYNC_FUNCTION | download_file | `def do_download():` pasado a `async_add_executor_job` |
+| home-assistant__core | components/xmpp/notify.py | INNER_SYNC_FUNCTION | upload_file_from_url | `def get_url(url):` pasado a `async_add_executor_job` |
+| BetaStreetOmnis__xhs_ai_publisher | src/core/pages/tools.py | EXECUTOR_WRAPPER | async_process | `lambda: requests.post(...).json()` en `run_in_executor` |
+| Kav-K__GPTDiscord | models/openai_model.py | EXECUTOR_WRAPPER | save_image_urls_and_return | `lambda: [requests.get(url).raw for url in urls]` en `run_in_executor` |
+
+**Estado: ✅ OK** — precisión ~83%, supera umbral heurístico del 60%. FP residual (logfire) es TEST_SUBJECT en archivo de test; candidato a TEST_FILE_DOWNGRADE en ticket separado. 6 tests nuevos añadidos (181 total, todos verdes).
 
 ---
 
@@ -936,6 +974,56 @@ Sin import del módulo objetivo → el detector no dispara, eliminando todos los
 
 ---
 
+### Fix aplicado #5 — EXECUTOR_WRAPPER en PYVIBE-002 (2026-06-28)
+
+**Problema:** El detector de PYVIBE-002 visitaba el cuerpo de funciones `def` síncronas anidadas y de lambdas dentro del contexto de un `async def`, sin resetear `_current_async_func`. Resultado: `requests.*()` llamado dentro de un `def inner():` o `lambda: ...` pasado a `run_in_executor` / `async_add_executor_job` se flaggeaba erróneamente como si bloqueara el event loop.
+
+**Patrones de FP afectados:**
+1. **INNER_SYNC_FUNCTION_EXECUTOR** — `def do_work(): requests.get(url)` pasado a `hass.async_add_executor_job(do_work)` (home-assistant)
+2. **EXECUTOR_WRAPPER lambda** — `run_in_executor(None, lambda: requests.post(url, json=data).json())` (xhs_ai_publisher, GPTDiscord)
+
+**Fix implementado en `pyvibe/rules/async_requests.py`:**
+```python
+def visit_FunctionDef(self, node: ast.FunctionDef):
+    previous = self._current_async_func
+    self._current_async_func = None   # sync inner def ≠ async context
+    self.generic_visit(node)
+    self._current_async_func = previous
+
+def visit_Lambda(self, node: ast.Lambda):
+    previous = self._current_async_func
+    self._current_async_func = None   # lambda may run in executor
+    self.generic_visit(node)
+    self._current_async_func = previous
+```
+
+**Impacto medido (corpus 250 repos):**
+
+| Regla | Hits pre-fix | Hits post-fix | Reducción | Precisión pre | Precisión post |
+|-------|-------------|--------------|-----------|---------------|----------------|
+| PYVIBE-002 | 11 | 6 | **−45%** | ~50% | **~83%** |
+
+**FPs eliminados:**
+- `home-assistant__core/components/downloader/services.py` — `download_file` (inner `def do_download()`)
+- `home-assistant__core/components/xmpp/notify.py` — `upload_file_from_url` (inner `def get_url()`)
+- `BetaStreetOmnis__xhs_ai_publisher/src/core/pages/tools.py` — `async_process` (lambda en `run_in_executor`)
+- `Kav-K__GPTDiscord/models/openai_model.py` — `save_image_urls_and_return` (lambda en `run_in_executor`)
+
+**FP residual (no corregido):**
+- `pydantic__logfire/tests/otel_integrations/test_requests.py` — `test_requests_instrumentation` (TEST_SUBJECT: test de instrumentación que llama `requests.get()` directamente; candidato a TEST_FILE_DOWNGRADE)
+
+**Tests añadidos:** 6 nuevos tests (181 total, 0 fallos):
+- `test_002_no_fp_run_in_executor_lambda`
+- `test_002_no_fp_run_in_executor_lambda_simple`
+- `test_002_no_fp_inner_sync_def_executor`
+- `test_002_no_fp_inner_sync_def_returns_request`
+- `test_002_still_detects_direct_call_in_async_body`
+- `test_002_still_detects_across_multiple_methods`
+
+**Resultado total:** PYVIBE-002 pasa de ⚠️ Needs Review (~50%) a **✅ OK (~83%)** — supera umbral heurístico del 60%.
+
+---
+
 ## Mapa de acción prioritaria
 
 | Prioridad | Acción | Reglas afectadas | Estado |
@@ -944,8 +1032,8 @@ Sin import del módulo objetivo → el detector no dispara, eliminando todos los
 | P0 | ~~Extender TEST_FILE_DOWNGRADE a PYVIBE-005~~ | 005 | **✅ DONE (2026-06-27)** |
 | P0 | ~~Fix INNER_SYNC_FUNCTION (visit_FunctionDef)~~ | 003, 015, 018 | **✅ DONE (2026-06-27)** |
 | P1 | ~~Fix NAME_COLLISION (rastrear imports, verificar módulo origen)~~ | 002, 004, 008 | **✅ DONE (2026-06-28)** |
-| P1 | Extender TEST_FILE_DOWNGRADE | 002, 012, 014, 016 | Pendiente |
-| P2 | Fix EXECUTOR_WRAPPER en PYVIBE-002 | 002 | Pendiente |
+| P1 | ~~Fix EXECUTOR_WRAPPER en PYVIBE-002~~ | 002 | **✅ DONE (2026-06-28)** |
+| P1 | Extender TEST_FILE_DOWNGRADE | 002 (logfire FP residual), 012, 014, 016 | Pendiente |
 | P2 | Análisis de flujo para ContextVar reset() | 006 | Pendiente |
 | P2 | Análisis de maxsize para Queue.put_nowait() | 020 | Pendiente |
 | P3 | Rastrear referencia a create_task/ensure_future | 012, 014 | Pendiente |

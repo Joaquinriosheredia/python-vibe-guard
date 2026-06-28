@@ -1,6 +1,6 @@
 # python-vibe-guard — Catálogo de Reglas
 
-**Versión:** 0.7.3 · 20 reglas activas · 175 tests  
+**Versión:** 0.7.4 · 20 reglas activas · 181 tests  
 **Última actualización:** 2026-06-28  
 **Fuente de datos:** sweep 250 repos (95,678 .py files) · `research/datasets/250-repos.json`
 
@@ -49,7 +49,7 @@ Leyenda columna Recomendación:
 | Regla | Categoría | Evidence | Recomendación | Detection | Runtime Impact | External Evidence | Repos 250 | Estado |
 |-------|-----------|----------|--------------|-----------|----------------|-------------------|-----------|--------|
 | [PYVIBE-001](accepted/PYVIBE-001.md) — `time.sleep()` en async def | Bloqueo de event loop | **A+** | CRITICAL ¹ | High | High | High | 12.4% (31/250) | ✅ Protocolo v1 |
-| [PYVIBE-002](accepted/PYVIBE-002.md) — `requests` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 3.2% (8/250) ★ | ✅ Precisión auditada · ~50% TP post NAME_COLLISION fix (11 hits, −21%) · FP residual: executor_wrap, test_subject |
+| [PYVIBE-002](accepted/PYVIBE-002.md) — `requests` sync en async def | Bloqueo de event loop | B | CRITICAL | — | — | — | 1.6% (4/250) ★✦ | ✅ Precisión auditada · ~83% TP post EXECUTOR_WRAPPER fix (6 hits, −45%) · FP residual: test_subject (1 hit, logfire) |
 | [PYVIBE-003](accepted/PYVIBE-003.md) — `asyncio.run()` dentro de async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 0.4% (1/250) | ✅ Precisión revisada · 100% TP (1/1) · audit anterior era incorrecto (test_batch es async def) |
 | [PYVIBE-004](accepted/PYVIBE-004.md) — `threading.Lock()` en async def | Primitiva incorrecta | B | CRITICAL | — | — | — | 1.2% (3/250) ★ | ✅ Precisión auditada · ~83% TP post NAME_COLLISION fix (6 hits, −90%) · fix: rastrear imports threading |
 | [PYVIBE-005](accepted/PYVIBE-005.md) — Celery task sin `time_limit` | Resiliencia | **A** | CRITICAL/WARNING† | Medium-High | High | Medium-High | 12.8% (32/250) | ✅ Precisión auditada · 86% TP post-fix+TEST_FILE_DOWNGRADE · 571 CRITICAL + 34 WARNING |
@@ -71,7 +71,8 @@ Leyenda columna Recomendación:
 
 ² PYVIBE-011: 0 hits en 250 repos — Evidence B se mantiene porque el patrón es real aunque infrecuente en repos de alta estrella.  
 ³ PYVIBE-020: debut en sweep 250 (sin baseline en 100 repos). Tasa de debut 16.4% es sólida para regla nueva.  
-★ PYVIBE-002/004/008: repos afectados post NAME_COLLISION fix (2026-06-28). 002: 14→11 hits (−21%), 8 repos. 004: 60→6 hits (−90%), 3 repos. 008: 436→41 hits (−91%), 7 repos. Fix: rastreo de imports en los detectores.
+★ PYVIBE-002/004/008: repos afectados post NAME_COLLISION fix (2026-06-28). 002: 14→11 hits (−21%), 8 repos. 004: 60→6 hits (−90%), 3 repos. 008: 436→41 hits (−91%), 7 repos. Fix: rastreo de imports en los detectores.  
+✦ PYVIBE-002: post EXECUTOR_WRAPPER fix (2026-06-28). 11→6 hits (−45%), 4 repos. Fix: visit_FunctionDef + visit_Lambda resetean contexto async en callables síncronos anidados. Precisión: ~50%→~83%.
 
 **‡ PYVIBE-019 — Limited Scope (Heurística de intención):**
 - Scope: `for _ in range(N)` / `for attempt in range(N)` en `async def`. While excluido.
@@ -132,7 +133,7 @@ En archivos `test_*.py`, `*_test.py`, o rutas bajo `tests/`: CRITICAL → WARNIN
 
 | Regla | Muestra | TP | FP | EDGE | Precisión | Estado |
 |-------|---------|----|----|------|-----------|--------|
-| PYVIBE-002 | 14/14 | 5 | 8 | 1 | 36% | B — mejora detección |
+| PYVIBE-002 | 6/6 ✦ | 5 | 1 | 0 | **~83%** | ✅ **OK** — post EXECUTOR_WRAPPER fix (11→6 hits, −45%) |
 | PYVIBE-003 | 1/1 | 1 | 0 | 0 | **100%** | ✅ **OK** — audit revisado + fix INNER_SYNC_FUNCTION |
 | PYVIBE-004 | 14/60 | 0 | 12 | 2 | 0% | **🔵 Limited Scope** — name collision |
 | PYVIBE-005 | 15/571† | 12 | 2 | 1 | **86%** | ✅ **Completa** — 86% post fix+TEST_FILE_DOWNGRADE · 34 hits → WARNING |
@@ -163,11 +164,11 @@ El detector usaba `node.attr == "task"` para cualquier `@<x>.task`. Fix: receive
 **✅ Fix #3: INNER_SYNC_FUNCTION bug en PYVIBE-003, 015, 018 (2026-06-27)**  
 `visit_FunctionDef` añadido a los tres detectores para resetear `_current_async_func = None` al entrar en scope síncrono. PYVIBE-015: 8→2 hits (−75%), precisión 57%→100%. PYVIBE-018: 49→37 hits (−24.5%), precisión 33%→80%. PYVIBE-003: audit revisado, único hit es TP (100%). 4 tests nuevos.
 
-**Bug sistémico del detector: "name collision"** *(pendiente)*  
-PYVIBE-002 (`requests`), PYVIBE-004 (`Lock`), PYVIBE-008 (`connect`) confunden
-nombres de variables/funciones con los módulos/clases objetivo. El detector debe
-verificar el módulo de origen del símbolo, no solo el nombre. Afecta severamente
-la precisión de 3 reglas (0-36% TP).
+**✅ Fix #4: NAME_COLLISION en PYVIBE-002, 004, 008 (2026-06-28)**  
+Detectores confundían variables/funciones locales con módulos objetivo (requests, Lock, sqlite3). Fix: rastreo de imports en `visit_Import`/`visit_ImportFrom`. Resultado: 002: 14→11 (−21%), 004: 60→6 (−90%), 008: 436→41 (−91%). 15 tests nuevos.
+
+**✅ Fix #5: EXECUTOR_WRAPPER en PYVIBE-002 (2026-06-28)**  
+`requests.*()` dentro de `def inner():` o `lambda: ...` anidados en async def no bloquea el event loop si se pasa a `run_in_executor` / `async_add_executor_job`. Fix: `visit_FunctionDef` + `visit_Lambda` resetean contexto async al entrar en callable síncrono anidado. Resultado: 002: 11→6 (−45%), precisión ~50%→~83%. 6 tests nuevos.
 
 **Patrón FP dominante: test subjects**  
 El FP más frecuente es que el detector flagueó el "objeto bajo prueba" en tests
@@ -203,6 +204,6 @@ objetivo existen en código de producción real. La auditoría reveló dos categ
 
 Prioridad de fixes pendientes:
 1. ~~Fix del bug "inner sync function" (impacto en PYVIBE-003, 015, 018)~~ **✅ DONE (2026-06-27)**
-2. Fix del bug "name collision" (impacto en PYVIBE-002, 004, 008)
-3. Extender TEST_FILE_DOWNGRADE a todas las reglas
-4. Añadir detección de executor wrapper para PYVIBE-002 y PYVIBE-007
+2. ~~Fix del bug "name collision" (impacto en PYVIBE-002, 004, 008)~~ **✅ DONE (2026-06-28)**
+3. ~~Añadir detección de executor wrapper para PYVIBE-002~~ **✅ DONE (2026-06-28)**
+4. Extender TEST_FILE_DOWNGRADE a reglas pendientes (PYVIBE-006, 007, 012, 014, 016)

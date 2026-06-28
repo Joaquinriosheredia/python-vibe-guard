@@ -37,6 +37,25 @@ class AsyncRequestsRule(ast.NodeVisitor):
         self.generic_visit(node)
         self._current_async_func = previous
 
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        # A sync `def` nested inside an async function resets the async context.
+        # requests.* inside a sync inner def runs on whatever thread invokes it —
+        # if passed to run_in_executor / async_add_executor_job it does not block
+        # the event loop.  We cannot know call sites from the AST alone, so we
+        # conservatively stop flagging inside any nested sync def.
+        previous = self._current_async_func
+        self._current_async_func = None
+        self.generic_visit(node)
+        self._current_async_func = previous
+
+    def visit_Lambda(self, node: ast.Lambda):
+        # Same reasoning as visit_FunctionDef: a lambda is a sync callable that
+        # may be passed to run_in_executor(None, lambda: requests.get(url)).
+        previous = self._current_async_func
+        self._current_async_func = None
+        self.generic_visit(node)
+        self._current_async_func = previous
+
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:
             self.generic_visit(node)
