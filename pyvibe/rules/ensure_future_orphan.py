@@ -1,9 +1,8 @@
 import ast
-from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncContextVisitor
 
 
-class EnsureFutureOrphanRule(ast.NodeVisitor):
+class EnsureFutureOrphanRule(AsyncContextVisitor):
     """
     PYVIBE-014 — asyncio.ensure_future() with discarded return value
 
@@ -19,16 +18,6 @@ class EnsureFutureOrphanRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-014"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Expr(self, node: ast.Expr):
         if self._current_async_func and self._is_ensure_future(node.value):

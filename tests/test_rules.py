@@ -1085,6 +1085,122 @@ async def store_result(data):
     assert v008[0].severity == "CRITICAL"
 
 
+# ─── TEST_FILE_DOWNGRADE extended to PYVIBE-006, 012, 014, 016 ──────────────
+
+def test_006_downgraded_to_warning_in_test_file():
+    src = """
+from contextvars import ContextVar
+request_id: ContextVar[str] = ContextVar('request_id')
+
+async def test_contextvar_propagation():
+    request_id.set('test-123')
+    assert request_id.get() == 'test-123'
+"""
+    violations = analyze_source(src, "tests/test_contextvar.py")
+    v006 = [v for v in violations if v.rule_id == "PYVIBE-006"]
+    assert len(v006) == 1
+    assert v006[0].severity == "WARNING"
+
+
+def test_006_still_critical_in_production_file():
+    src = """
+from contextvars import ContextVar
+current_user: ContextVar[str] = ContextVar('current_user')
+
+async def handle_request(user_id: str):
+    current_user.set(user_id)
+    await process_request()
+"""
+    violations = analyze_source(src, "app/middleware/auth.py")
+    v006 = [v for v in violations if v.rule_id == "PYVIBE-006"]
+    assert len(v006) == 1
+    assert v006[0].severity == "CRITICAL"
+
+
+def test_012_downgraded_to_warning_in_test_file():
+    src = """
+import asyncio
+
+async def test_concurrent_tasks():
+    asyncio.create_task(some_coroutine())
+    await asyncio.sleep(0.1)
+"""
+    violations = analyze_source(src, "tests/test_concurrency.py")
+    v012 = [v for v in violations if v.rule_id == "PYVIBE-012"]
+    assert len(v012) == 1
+    assert v012[0].severity == "WARNING"
+
+
+def test_012_still_critical_in_production_file():
+    src = """
+import asyncio
+
+async def process_event(event):
+    asyncio.create_task(notify_downstream(event))
+    return {"status": "accepted"}
+"""
+    violations = analyze_source(src, "app/handlers/event_handler.py")
+    v012 = [v for v in violations if v.rule_id == "PYVIBE-012"]
+    assert len(v012) == 1
+    assert v012[0].severity == "CRITICAL"
+
+
+def test_014_downgraded_to_warning_in_test_file():
+    src = """
+import asyncio
+
+async def test_future_scheduling():
+    asyncio.ensure_future(background_work())
+    await asyncio.sleep(0)
+"""
+    violations = analyze_source(src, "tests/test_scheduler.py")
+    v014 = [v for v in violations if v.rule_id == "PYVIBE-014"]
+    assert len(v014) == 1
+    assert v014[0].severity == "WARNING"
+
+
+def test_014_still_critical_in_production_file():
+    src = """
+import asyncio
+
+async def on_message_received(msg):
+    asyncio.ensure_future(persist_to_db(msg))
+"""
+    violations = analyze_source(src, "app/consumers/message_handler.py")
+    v014 = [v for v in violations if v.rule_id == "PYVIBE-014"]
+    assert len(v014) == 1
+    assert v014[0].severity == "CRITICAL"
+
+
+def test_016_downgraded_to_warning_in_test_file():
+    src = """
+import httpx
+
+async def test_sync_client_instrumentation():
+    with httpx.Client() as client:
+        response = client.get("http://testserver/health")
+    assert response.status_code == 200
+"""
+    violations = analyze_source(src, "tests/otel_integrations/test_httpx.py")
+    v016 = [v for v in violations if v.rule_id == "PYVIBE-016"]
+    assert len(v016) == 1
+    assert v016[0].severity == "WARNING"
+
+
+def test_016_still_critical_in_production_file():
+    src = """
+import httpx
+
+async def fetch_config(url: str) -> dict:
+    with httpx.Client() as client:
+        return client.get(url).json()
+"""
+    violations = analyze_source(src, "app/config/loader.py")
+    v016 = [v for v in violations if v.rule_id == "PYVIBE-016"]
+    assert len(v016) == 1
+    assert v016[0].severity == "CRITICAL"
+
+
 # ─── Fix 2: downgrade_in_tests and skip_test_files API ───────────────────────
 
 def test_downgrade_all_rules_in_test_file():

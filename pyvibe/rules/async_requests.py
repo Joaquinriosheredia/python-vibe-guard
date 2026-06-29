@@ -1,11 +1,11 @@
 import ast
 from typing import List, Set
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 REQUESTS_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "request"}
 
 
-class AsyncRequestsRule(ast.NodeVisitor):
+class AsyncRequestsRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-002 — requests.* inside async def
 
@@ -20,8 +20,7 @@ class AsyncRequestsRule(ast.NodeVisitor):
     SEVERITY = "CRITICAL"
 
     def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
+        super().__init__()
         # Names bound to the `requests` module via `import requests [as X]`
         self._requests_aliases: Set[str] = set()
 
@@ -30,31 +29,6 @@ class AsyncRequestsRule(ast.NodeVisitor):
             if alias.name == "requests":
                 self._requests_aliases.add(alias.asname if alias.asname else alias.name)
         self.generic_visit(node)
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
-
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        # A sync `def` nested inside an async function resets the async context.
-        # requests.* inside a sync inner def runs on whatever thread invokes it —
-        # if passed to run_in_executor / async_add_executor_job it does not block
-        # the event loop.  We cannot know call sites from the AST alone, so we
-        # conservatively stop flagging inside any nested sync def.
-        previous = self._current_async_func
-        self._current_async_func = None
-        self.generic_visit(node)
-        self._current_async_func = previous
-
-    def visit_Lambda(self, node: ast.Lambda):
-        # Same reasoning as visit_FunctionDef: a lambda is a sync callable that
-        # may be passed to run_in_executor(None, lambda: requests.get(url)).
-        previous = self._current_async_func
-        self._current_async_func = None
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

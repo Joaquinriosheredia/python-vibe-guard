@@ -1,11 +1,11 @@
 import ast
 from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 OS_BLOCKING = {"system", "popen", "waitpid"}
 
 
-class OsBlockingRule(ast.NodeVisitor):
+class OsBlockingRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-011 — os.system / os.popen / os.waitpid inside async def
 
@@ -19,16 +19,6 @@ class OsBlockingRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-011"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

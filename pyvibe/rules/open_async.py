@@ -1,9 +1,9 @@
 import ast
 from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 
-class OpenAsyncRule(ast.NodeVisitor):
+class OpenAsyncRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-009 — open() builtin inside async def
 
@@ -20,16 +20,6 @@ class OpenAsyncRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-009"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

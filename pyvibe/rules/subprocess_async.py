@@ -1,11 +1,11 @@
 import ast
 from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 SUBPROCESS_BLOCKING = {"run", "call", "check_output", "Popen"}
 
 
-class SubprocessAsyncRule(ast.NodeVisitor):
+class SubprocessAsyncRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-007 — subprocess blocking calls inside async def
 
@@ -20,16 +20,6 @@ class SubprocessAsyncRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-007"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

@@ -1,11 +1,11 @@
 import ast
 from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 HTTPX_BLOCKING = {"get", "post", "put", "patch", "delete", "request", "stream"}
 
 
-class HttpxSyncRule(ast.NodeVisitor):
+class HttpxSyncRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-010 — httpx top-level sync methods inside async def
 
@@ -22,16 +22,6 @@ class HttpxSyncRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-010"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

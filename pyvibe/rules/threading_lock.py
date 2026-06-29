@@ -1,6 +1,6 @@
 import ast
 from typing import List, Set
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 # threading.Event is a signalling primitive (set/wait), not a lock — it does not
 # block the event loop in the same way and is legitimately used as a sync↔async
@@ -8,7 +8,7 @@ from pyvibe.rules.base import Violation
 THREADING_PRIMITIVES = {"Lock", "RLock", "Semaphore", "BoundedSemaphore", "Condition"}
 
 
-class ThreadingLockRule(ast.NodeVisitor):
+class ThreadingLockRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-004 — threading.Lock (and other threading primitives) inside async def
 
@@ -27,8 +27,7 @@ class ThreadingLockRule(ast.NodeVisitor):
     SEVERITY = "CRITICAL"
 
     def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
+        super().__init__()
         # Names bound to the `threading` module via `import threading [as X]`
         self._threading_aliases: Set[str] = set()
         # Names imported directly from threading: `from threading import Lock`
@@ -46,12 +45,6 @@ class ThreadingLockRule(ast.NodeVisitor):
                 if alias.name in THREADING_PRIMITIVES:
                     self._from_threading.add(alias.asname if alias.asname else alias.name)
         self.generic_visit(node)
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

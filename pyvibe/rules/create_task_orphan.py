@@ -1,9 +1,8 @@
 import ast
-from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncContextVisitor
 
 
-class CreateTaskOrphanRule(ast.NodeVisitor):
+class CreateTaskOrphanRule(AsyncContextVisitor):
     """
     PYVIBE-012 — asyncio.create_task() with discarded return value
 
@@ -17,16 +16,6 @@ class CreateTaskOrphanRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-012"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Expr(self, node: ast.Expr):
         # ast.Expr (capital-E) is the *statement* wrapper for a discarded expression.

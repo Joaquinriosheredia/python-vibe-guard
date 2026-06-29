@@ -77,6 +77,15 @@ class WhileTrueNoAwaitRule(ast.NodeVisitor):
         self._current_async_func = previous
         self._current_func_is_async_gen = previous_is_gen
 
+    def visit_Lambda(self, node: ast.Lambda):
+        previous = self._current_async_func
+        previous_is_gen = self._current_func_is_async_gen
+        self._current_async_func = None
+        self._current_func_is_async_gen = False
+        self.generic_visit(node)
+        self._current_async_func = previous
+        self._current_func_is_async_gen = previous_is_gen
+
     def visit_While(self, node: ast.While):
         if (
             self._current_async_func

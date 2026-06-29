@@ -1,9 +1,9 @@
 import ast
 from typing import List, Set
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 
-class SqliteAsyncRule(ast.NodeVisitor):
+class SqliteAsyncRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-008 — sqlite3.connect() inside async def
 
@@ -18,8 +18,7 @@ class SqliteAsyncRule(ast.NodeVisitor):
     SEVERITY = "CRITICAL"
 
     def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
+        super().__init__()
         # Names bound to the `sqlite3` module via `import sqlite3 [as X]`
         self._sqlite3_aliases: Set[str] = set()
         # Names imported directly from sqlite3: `from sqlite3 import connect`
@@ -37,23 +36,6 @@ class SqliteAsyncRule(ast.NodeVisitor):
                 if alias.name == "connect":
                     self._from_sqlite3.add(alias.asname if alias.asname else alias.name)
         self.generic_visit(node)
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
-
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        # A sync `def` nested inside an `async def` creates its own synchronous
-        # scope. sqlite3.connect() inside that scope is NOT blocking the event
-        # loop — if the caller passes the sync function to asyncio.to_thread()
-        # or run_in_executor(), the blocking happens in a thread pool as intended.
-        # Reset async context so inner sync bodies don't inherit it.
-        previous = self._current_async_func
-        self._current_async_func = None
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func is None:

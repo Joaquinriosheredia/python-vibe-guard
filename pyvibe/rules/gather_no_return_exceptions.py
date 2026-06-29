@@ -1,9 +1,8 @@
 import ast
-from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncContextVisitor
 
 
-class GatherNoReturnExceptionsRule(ast.NodeVisitor):
+class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     """
     PYVIBE-013 — asyncio.gather() without return_exceptions=True
 
@@ -22,16 +21,6 @@ class GatherNoReturnExceptionsRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-013"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func and self._is_gather(node) and not self._has_return_exceptions_true(node):

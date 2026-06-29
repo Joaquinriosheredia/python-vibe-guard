@@ -1,9 +1,8 @@
 import ast
-from typing import List
-from pyvibe.rules.base import Violation
+from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 
-class LoopRunUntilCompleteRule(ast.NodeVisitor):
+class LoopRunUntilCompleteRule(AsyncBlockingCallVisitor):
     """
     PYVIBE-015 — loop.run_until_complete() inside async def
 
@@ -18,22 +17,6 @@ class LoopRunUntilCompleteRule(ast.NodeVisitor):
 
     RULE_ID = "PYVIBE-015"
     SEVERITY = "CRITICAL"
-
-    def __init__(self):
-        self.violations: List[Violation] = []
-        self._current_async_func: str = None
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = node.name
-        self.generic_visit(node)
-        self._current_async_func = previous
-
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        previous = self._current_async_func
-        self._current_async_func = None
-        self.generic_visit(node)
-        self._current_async_func = previous
 
     def visit_Call(self, node: ast.Call):
         if self._current_async_func and self._is_run_until_complete(node):

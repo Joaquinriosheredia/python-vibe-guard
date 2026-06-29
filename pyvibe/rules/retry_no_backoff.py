@@ -199,6 +199,15 @@ class RetryNoBackoffRule(ast.NodeVisitor):
         self._current_async_func = prev_func
         self._retry_loop_stack = prev_stack
 
+    def visit_Lambda(self, node: ast.Lambda):
+        prev_func = self._current_async_func
+        prev_stack = self._retry_loop_stack
+        self._current_async_func = None
+        self._retry_loop_stack = []
+        self.generic_visit(node)
+        self._current_async_func = prev_func
+        self._retry_loop_stack = prev_stack
+
     def visit_For(self, node: ast.For):
         self._retry_loop_stack.append(_is_retry_loop(node))
         self.generic_visit(node)
