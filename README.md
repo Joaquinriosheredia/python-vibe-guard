@@ -160,7 +160,7 @@ python -m pyvibe explain PYVIBE-002
 
 # Baseline mode: suppress pre-existing findings, only fail on new ones
 python -m pyvibe baseline create src/     # snapshot current findings
-python -m pyvibe scan src/ --baseline     # only reports findings NOT in the baseline
+python -m pyvibe src/ --baseline          # only reports findings NOT in the baseline
 
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
@@ -258,9 +258,12 @@ python -m pyvibe baseline create src/
 python -m pyvibe baseline update src/
 
 # Full scan, but only reports findings NOT already in the baseline
+python -m pyvibe src/ --baseline
+python -m pyvibe src/ --baseline --json
+python -m pyvibe src/ --baseline --sarif
+
+# `pyvibe scan` is an equivalent, explicit subcommand form of the same flags
 python -m pyvibe scan src/ --baseline
-python -m pyvibe scan src/ --baseline --json
-python -m pyvibe scan src/ --baseline --sarif
 ```
 
 A finding is considered "already known" on an exact match of `(file path, rule ID, line
@@ -370,7 +373,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-266 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, and baseline mode coverage.
+268 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, and baseline mode coverage.
 
 ---
 

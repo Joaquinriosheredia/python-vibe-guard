@@ -207,3 +207,28 @@ def test_cli_scan_without_baseline_flag_matches_bare_invocation(tmp_path):
     bare_result = _run_cli([".", "--json"], cwd=tmp_path)
 
     assert json.loads(scan_result.stdout) == json.loads(bare_result.stdout)
+
+
+def test_cli_bare_command_supports_baseline_flag(tmp_path):
+    (tmp_path / "app.py").write_text(VIOLATION_SRC)
+    _run_cli(["baseline", "create", "."], cwd=tmp_path)
+
+    (tmp_path / "app.py").write_text(
+        VIOLATION_SRC + "\nasync def third():\n    time.sleep(1)\n"
+    )
+
+    result = _run_cli([".", "--baseline", "--json"], cwd=tmp_path)
+    output = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert len(output) == 1
+    assert output[0]["line"] == 10
+
+
+def test_cli_bare_command_baseline_missing_file_exits_2(tmp_path):
+    (tmp_path / "app.py").write_text("print('clean')\n")
+
+    result = _run_cli([".", "--baseline"], cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert "No baseline found" in result.stderr

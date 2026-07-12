@@ -13,7 +13,8 @@ Usage:
     python -m pyvibe review --base main       # diff against another ref
     python -m pyvibe baseline create [path]   # snapshot existing findings to .pyvibe-baseline.json
     python -m pyvibe baseline update [path]   # overwrite the existing baseline
-    python -m pyvibe scan [path] --baseline   # scan, suppressing findings already in the baseline
+    python -m pyvibe <path> --baseline        # scan, suppressing findings already in the baseline
+    python -m pyvibe scan <path> --baseline   # equivalent, explicit subcommand form
 """
 import argparse
 import json
@@ -94,9 +95,21 @@ def main():
             "Default: only PYVIBE-001, PYVIBE-007, and PYVIBE-013 are downgraded."
         ),
     )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Only report findings not already present in the baseline (see `pyvibe baseline create`)",
+    )
+    parser.add_argument(
+        "--baseline-path",
+        metavar="PATH",
+        default=DEFAULT_BASELINE_PATH,
+        help=f"Path to the baseline file (default: {DEFAULT_BASELINE_PATH})",
+    )
     args = parser.parse_args()
 
     file_results = _resolve_file_results(args)
+    file_results = _apply_baseline_filter(args, file_results)
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
 
@@ -141,6 +154,24 @@ def _resolve_file_results(args) -> dict:
         skip_test_files=skip_test_files,
         downgrade_in_tests=downgrade_in_tests,
     )
+
+
+def _apply_baseline_filter(args, file_results: dict) -> dict:
+    """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
+
+    Expects args.baseline/.baseline_path. No-op when --baseline wasn't passed.
+    """
+    if not args.baseline:
+        return file_results
+
+    from pyvibe.baseline import BaselineNotFoundError, filter_new_violations, load_baseline
+
+    try:
+        baseline = load_baseline(args.baseline_path)
+    except BaselineNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    return filter_new_violations(file_results, baseline)
 
 
 def _emit_scan_output(args, file_results: dict, total_violations: int, total_files: int):
@@ -360,16 +391,7 @@ def _main_scan(argv):
     args = parser.parse_args(argv)
 
     file_results = _resolve_file_results(args)
-
-    if args.baseline:
-        from pyvibe.baseline import BaselineNotFoundError, filter_new_violations, load_baseline
-
-        try:
-            baseline = load_baseline(args.baseline_path)
-        except BaselineNotFoundError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(2)
-        file_results = filter_new_violations(file_results, baseline)
+    file_results = _apply_baseline_filter(args, file_results)
 
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
