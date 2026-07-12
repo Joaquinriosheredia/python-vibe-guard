@@ -176,11 +176,16 @@ def test_analyze_file_without_line_filter_returns_everything(tmp_path):
 # ─── `pyvibe review` CLI (subprocess, end-to-end against a real git repo) ──
 
 def _run_cli(args, cwd):
+    # cwd here is a throwaway temp git repo, not REPO_ROOT, so `-m pyvibe`
+    # can't rely on cwd-insertion to find the package — it must be told
+    # explicitly via PYTHONPATH (pyvibe isn't installed in the test env).
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
     return subprocess.run(
         [sys.executable, "-m", "pyvibe", *args],
         cwd=cwd,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
