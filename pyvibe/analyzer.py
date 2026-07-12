@@ -1,6 +1,6 @@
 import ast
 from pathlib import Path
-from typing import FrozenSet, List
+from typing import FrozenSet, List, Optional
 
 from pyvibe.rules.base import Violation
 from pyvibe.rules.async_sleep import AsyncSleepRule
@@ -132,9 +132,16 @@ def analyze_file(
     path: Path,
     *,
     downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    line_filter: Optional[FrozenSet[int]] = None,
 ) -> List[Violation]:
+    """line_filter: if given, only violations whose `line` is in this set
+    are returned (used by `pyvibe review` to report only diff-touched lines).
+    """
     source = path.read_text(encoding="utf-8", errors="ignore")
-    return analyze_source(source, filepath=str(path), downgrade_in_tests=downgrade_in_tests)
+    violations = analyze_source(source, filepath=str(path), downgrade_in_tests=downgrade_in_tests)
+    if line_filter is not None:
+        violations = [v for v in violations if v.line in line_filter]
+    return violations
 
 
 DEFAULT_EXCLUDES = frozenset({
