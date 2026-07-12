@@ -148,8 +148,15 @@ python -m pyvibe src/
 # JSON output for CI/CD pipelines
 python -m pyvibe src/ --json
 
+# SARIF 2.1.0 output for GitHub Code Scanning (writes results.sarif)
+python -m pyvibe src/ --sarif
+python -m pyvibe src/ --sarif --sarif-output custom-path.sarif
+
 # Exclude directories (adds to built-in defaults: venv, .venv, __pycache__, …)
 python -m pyvibe src/ --exclude tests
+
+# Show the research evidence behind a rule (accuracy, false positives, sources)
+python -m pyvibe explain PYVIBE-002
 
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
@@ -186,6 +193,42 @@ python -m pyvibe src/ --exclude tests
   4 violation(s) in 1 file(s)
 ```
 
+### `pyvibe explain`
+
+Every rule's accuracy claims come from `research/accepted/PYVIBE-XXX.md` — a per-rule
+evidence file with repo-sweep data, an evidence-level grade, and a hit-by-hit precision
+audit. `pyvibe explain` surfaces that in the terminal instead of making you go dig for it:
+
+```bash
+python -m pyvibe explain PYVIBE-002
+```
+
+```
+  PYVIBE-002 — requests.* inside async def
+  ───────────────────────────────────────────────
+
+  Problema:
+    requests.* inside async def
+
+  Por qué ocurre:
+    `requests` is a synchronous HTTP library. Calling it inside an async function
+    blocks the OS thread running the event loop. Under concurrent load this
+    serialises all I/O and eliminates any benefit of async.
+
+  Visto en: 4.0% (10/250 repos, sweep-250 dataset)
+  Nivel de evidencia: B
+  Precisión auditada: ~83%
+  Falsos positivos conocidos: EXECUTOR_WRAPPER; INNER_SYNC_FUNCTION_EXECUTOR; ...
+
+  Fix sugerido:
+    use `httpx.AsyncClient` or `aiohttp.ClientSession` with await.
+
+  Full report: research/accepted/PYVIBE-002.md
+```
+
+If a rule has no evidence file, it prints a clear `No evidence file found for PYVIBE-XXX`
+and exits non-zero — it never invents data.
+
 ---
 
 ## CI/CD integration
@@ -200,6 +243,24 @@ Add to your GitHub Actions workflow:
 ```
 
 The scanner exits with code `1` when violations are found, failing the CI job.
+
+### GitHub Code Scanning (SARIF)
+
+```yaml
+- name: python-vibe-guard scan
+  run: |
+    pip install python-vibe-guard
+    python -m pyvibe src/ --sarif
+  continue-on-error: true  # let the upload step surface results in the PR instead
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+Findings then show up as annotations on the PR diff and in the repo's Security tab,
+each linking back to its `research/accepted/PYVIBE-XXX.md` evidence file via `helpUri`.
 
 ---
 
@@ -253,7 +314,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-123 tests: true positives + false-positive guards for every rule.
+226 tests: true positives + false-positive guards for every rule, plus SARIF output and `pyvibe explain` coverage.
 
 ---
 

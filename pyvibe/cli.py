@@ -5,8 +5,10 @@ python-vibe-guard — runtime anti-pattern scanner for async Python
 Usage:
     python -m pyvibe <path>                   # file or directory
     python -m pyvibe <path> --json            # machine-readable output
+    python -m pyvibe <path> --sarif           # SARIF 2.1.0 -> results.sarif
     python -m pyvibe <path> --no-test-files   # skip test files entirely
     python -m pyvibe <path> --downgrade-in-tests  # WARNING instead of CRITICAL in all test files
+    python -m pyvibe explain PYVIBE-002       # show research evidence for a rule
 """
 import argparse
 import json
@@ -25,6 +27,10 @@ from pyvibe.analyzer import (
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "explain":
+        _main_explain(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(
         prog="pyvibe",
         description="Detect runtime anti-patterns in async Python code",
@@ -32,6 +38,17 @@ def main():
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("path", help="File or directory to scan")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--sarif",
+        action="store_true",
+        help="Also write SARIF 2.1.0 output (for GitHub Code Scanning)",
+    )
+    parser.add_argument(
+        "--sarif-output",
+        metavar="PATH",
+        default="results.sarif",
+        help="Path to write SARIF output to (default: results.sarif)",
+    )
     parser.add_argument(
         "--exclude",
         metavar="DIR",
@@ -97,6 +114,12 @@ def main():
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
 
+    if args.sarif:
+        from pyvibe.sarif import write_sarif
+
+        write_sarif(file_results, args.sarif_output)
+        print(f"SARIF results written to {args.sarif_output}")
+
     if args.json:
         output = []
         for path, violations in file_results.items():
@@ -142,6 +165,28 @@ def _print_human(file_results: dict, total_violations: int, total_files: int):
     print("  ─────────────────────────────────────────────")
     print(f"  {total_violations} violation(s) in {total_files} file(s)")
     print()
+
+
+def _main_explain(argv):
+    parser = argparse.ArgumentParser(
+        prog="pyvibe explain",
+        description="Show the research evidence behind a python-vibe-guard rule",
+    )
+    parser.add_argument("rule_id", help="Rule ID, e.g. PYVIBE-002")
+    args = parser.parse_args(argv)
+
+    from pyvibe.explain import EvidenceNotFoundError, explain_rule
+
+    try:
+        text = explain_rule(args.rule_id)
+    except EvidenceNotFoundError as e:
+        print(str(e))
+        sys.exit(1)
+
+    print()
+    print(text)
+    print()
+    sys.exit(0)
 
 
 if __name__ == "__main__":
