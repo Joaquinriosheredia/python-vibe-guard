@@ -11,6 +11,9 @@ Usage:
     python -m pyvibe explain PYVIBE-002       # show research evidence for a rule
     python -m pyvibe review                   # PR review: only diff-touched lines (git diff HEAD~1)
     python -m pyvibe review --base main       # diff against another ref
+    python -m pyvibe baseline create [path]   # snapshot existing findings to .pyvibe-baseline.json
+    python -m pyvibe baseline update [path]   # overwrite the existing baseline
+    python -m pyvibe scan [path] --baseline   # scan, suppressing findings already in the baseline
 """
 import argparse
 import json
@@ -26,6 +29,7 @@ from pyvibe.analyzer import (
     TEST_FILE_DOWNGRADE,
     _is_test_file,
 )
+from pyvibe.baseline import DEFAULT_BASELINE_PATH
 
 
 def main():
@@ -35,6 +39,14 @@ def main():
 
     if len(sys.argv) > 1 and sys.argv[1] == "review":
         _main_review(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "baseline":
+        _main_baseline(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "scan":
+        _main_scan(sys.argv[2:])
         return
 
     parser = argparse.ArgumentParser(
@@ -84,6 +96,20 @@ def main():
     )
     args = parser.parse_args()
 
+    file_results = _resolve_file_results(args)
+    total_violations = sum(len(v) for v in file_results.values())
+    total_files = sum(1 for v in file_results.values() if v)
+
+    _emit_scan_output(args, file_results, total_violations, total_files)
+
+    sys.exit(1 if total_violations > 0 else 0)
+
+
+def _resolve_file_results(args) -> dict:
+    """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
+
+    Expects args.path/.exclude/.no_test_files/.downgrade_in_tests.
+    """
     target = Path(args.path)
     if not target.exists():
         print(f"Error: {target} does not exist", file=sys.stderr)
@@ -104,22 +130,24 @@ def main():
 
     if target.is_file():
         if target.suffix != ".py":
-            file_results = {}
-        elif skip_test_files and _is_test_file(str(target)):
-            file_results = {}
-        else:
-            file_results = {target: analyze_file(target, downgrade_in_tests=downgrade_in_tests)}
-    else:
-        file_results = analyze_directory(
-            target,
-            exclude=exclude,
-            skip_test_files=skip_test_files,
-            downgrade_in_tests=downgrade_in_tests,
-        )
+            return {}
+        if skip_test_files and _is_test_file(str(target)):
+            return {}
+        return {target: analyze_file(target, downgrade_in_tests=downgrade_in_tests)}
 
-    total_violations = sum(len(v) for v in file_results.values())
-    total_files = sum(1 for v in file_results.values() if v)
+    return analyze_directory(
+        target,
+        exclude=exclude,
+        skip_test_files=skip_test_files,
+        downgrade_in_tests=downgrade_in_tests,
+    )
 
+
+def _emit_scan_output(args, file_results: dict, total_violations: int, total_files: int):
+    """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
+
+    Expects args.sarif/.sarif_output/.json.
+    """
     if args.sarif:
         from pyvibe.sarif import write_sarif
 
@@ -143,8 +171,6 @@ def main():
         print(json.dumps(output, indent=2))
     else:
         _print_human(file_results, total_violations, total_files)
-
-    sys.exit(1 if total_violations > 0 else 0)
 
 
 def _print_human(file_results: dict, total_violations: int, total_files: int):
@@ -283,6 +309,132 @@ def _print_review(file_results: dict, changed: dict, total_violations: int):
     print("  ─────────────────────────────────")
     print(f"  {total_violations} violation(s) in new/modified code")
     print()
+
+
+def _main_scan(argv):
+    parser = argparse.ArgumentParser(
+        prog="pyvibe scan",
+        description="Scan for anti-patterns (same as bare `pyvibe <path>`), with optional baseline filtering",
+    )
+    parser.add_argument("path", help="File or directory to scan")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--sarif",
+        action="store_true",
+        help="Also write SARIF 2.1.0 output (for GitHub Code Scanning)",
+    )
+    parser.add_argument(
+        "--sarif-output",
+        metavar="PATH",
+        default="results.sarif",
+        help="Path to write SARIF output to (default: results.sarif)",
+    )
+    parser.add_argument(
+        "--exclude",
+        metavar="DIR",
+        action="append",
+        default=[],
+        help=(
+            "Directory name to exclude (can be repeated). "
+            "Added on top of the built-in defaults: "
+            + ", ".join(sorted(DEFAULT_EXCLUDES))
+        ),
+    )
+    parser.add_argument("--no-test-files", action="store_true", help="Exclude test files from the scan entirely")
+    parser.add_argument(
+        "--downgrade-in-tests",
+        action="store_true",
+        help="Downgrade ALL violations in test files from CRITICAL to WARNING",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Only report findings not already present in the baseline (see `pyvibe baseline create`)",
+    )
+    parser.add_argument(
+        "--baseline-path",
+        metavar="PATH",
+        default=DEFAULT_BASELINE_PATH,
+        help=f"Path to the baseline file (default: {DEFAULT_BASELINE_PATH})",
+    )
+    args = parser.parse_args(argv)
+
+    file_results = _resolve_file_results(args)
+
+    if args.baseline:
+        from pyvibe.baseline import BaselineNotFoundError, filter_new_violations, load_baseline
+
+        try:
+            baseline = load_baseline(args.baseline_path)
+        except BaselineNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+        file_results = filter_new_violations(file_results, baseline)
+
+    total_violations = sum(len(v) for v in file_results.values())
+    total_files = sum(1 for v in file_results.values() if v)
+
+    _emit_scan_output(args, file_results, total_violations, total_files)
+
+    sys.exit(1 if total_violations > 0 else 0)
+
+
+def _main_baseline(argv):
+    parser = argparse.ArgumentParser(
+        prog="pyvibe baseline",
+        description="Snapshot existing findings so future scans only report new ones",
+    )
+    parser.add_argument("action", choices=["create", "update"], help="create: refuses to overwrite an existing baseline; update: always overwrites")
+    parser.add_argument("path", nargs="?", default=".", help="File or directory to scan (default: current directory)")
+    parser.add_argument(
+        "--baseline-path",
+        metavar="PATH",
+        default=DEFAULT_BASELINE_PATH,
+        help=f"Path to write the baseline to (default: {DEFAULT_BASELINE_PATH})",
+    )
+    parser.add_argument(
+        "--exclude",
+        metavar="DIR",
+        action="append",
+        default=[],
+        help="Directory name to exclude (can be repeated)",
+    )
+    parser.add_argument("--no-test-files", action="store_true", help="Exclude test files from the baseline entirely")
+    args = parser.parse_args(argv)
+
+    if args.action == "create" and Path(args.baseline_path).exists():
+        print(
+            f"Error: {args.baseline_path} already exists. "
+            "Use `pyvibe baseline update` to overwrite it.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    target = Path(args.path)
+    if not target.exists():
+        print(f"Error: {target} does not exist", file=sys.stderr)
+        sys.exit(2)
+
+    exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
+
+    if target.is_file():
+        if target.suffix != ".py":
+            file_results = {}
+        elif args.no_test_files and _is_test_file(str(target)):
+            file_results = {}
+        else:
+            file_results = {target: analyze_file(target)}
+    else:
+        file_results = analyze_directory(target, exclude=exclude, skip_test_files=args.no_test_files)
+
+    from pyvibe.baseline import write_baseline
+
+    total_findings = sum(len(v) for v in file_results.values())
+    write_baseline(file_results, args.baseline_path)
+
+    verb = "created" if args.action == "create" else "updated"
+    print(f"Baseline {verb}: {total_findings} findings saved to {args.baseline_path}")
+    sys.exit(0)
 
 
 def _main_explain(argv):

@@ -158,6 +158,10 @@ python -m pyvibe src/ --exclude tests
 # Show the research evidence behind a rule (accuracy, false positives, sources)
 python -m pyvibe explain PYVIBE-002
 
+# Baseline mode: suppress pre-existing findings, only fail on new ones
+python -m pyvibe baseline create src/     # snapshot current findings
+python -m pyvibe scan src/ --baseline     # only reports findings NOT in the baseline
+
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
 
@@ -239,6 +243,35 @@ python -m pyvibe explain PYVIBE-002
 
 If a rule has no evidence file, it prints a clear `No evidence file found for PYVIBE-XXX`
 and exits non-zero — it never invents data.
+
+### Baseline mode
+
+Adopting python-vibe-guard on an existing codebase usually means hundreds of pre-existing
+findings you can't fix before CI needs to go green. Baseline mode snapshots the current
+findings once, then only fails on genuinely **new** ones:
+
+```bash
+# Snapshot every current finding into .pyvibe-baseline.json
+python -m pyvibe baseline create src/
+
+# Refuses to run if a baseline already exists — use `update` to overwrite it
+python -m pyvibe baseline update src/
+
+# Full scan, but only reports findings NOT already in the baseline
+python -m pyvibe scan src/ --baseline
+python -m pyvibe scan src/ --baseline --json
+python -m pyvibe scan src/ --baseline --sarif
+```
+
+A finding is considered "already known" on an exact match of `(file path, rule ID, line
+number)`. Anything that doesn't match — a new violation, or an existing one that moved to
+a different line — is reported and fails the scan (exit code `1`); an unchanged baseline
+produces exit code `0`.
+
+`.pyvibe-baseline.json` is a plain JSON file — whether to commit it or add it to
+`.gitignore` is up to your team. Commit it if you want the accepted-debt snapshot shared
+and reviewed like any other file; gitignore it if each contributor/CI run should
+regenerate its own baseline instead.
 
 ---
 
@@ -337,7 +370,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-226 tests: true positives + false-positive guards for every rule, plus SARIF output and `pyvibe explain` coverage.
+266 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, and baseline mode coverage.
 
 ---
 
