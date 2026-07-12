@@ -264,6 +264,18 @@ each linking back to its `research/accepted/PYVIBE-XXX.md` evidence file via `he
 
 ---
 
+## GitHub Action
+
+- name: python-vibe-guard
+  uses: joaquinriosheredia/python-vibe-guard-action@v1
+  with:
+    path: src/
+
+Violations appear directly in GitHub Security tab (SARIF).
+Link: https://github.com/Joaquinriosheredia/python-vibe-guard-action
+
+---
+
 ## Pre-commit integration
 
 Add to your `.pre-commit-config.yaml`:
