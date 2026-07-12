@@ -46,6 +46,16 @@ def sync_handler():
     assert len(violations) == 0
 
 
+def test_001_suggested_fix_uses_real_args():
+    src = """
+import time
+async def handler():
+    time.sleep(5)
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == "await asyncio.sleep(5)"
+
+
 # ─── PYVIBE-002 ──────────────────────────────────────────────────────────────
 
 def test_002_detects_requests_get_in_async():
@@ -78,6 +88,19 @@ def sync_fetch():
 """
     violations = analyze_source(src)
     assert len(violations) == 0
+
+
+def test_002_suggested_fix_uses_real_args():
+    src = """
+import requests
+async def fetch():
+    return requests.get("https://example.com", timeout=5)
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == (
+        "async with httpx.AsyncClient() as client:\n"
+        '    response = await client.get("https://example.com", timeout=5)'
+    )
 
 
 # ─── PYVIBE-003 ──────────────────────────────────────────────────────────────
@@ -116,6 +139,16 @@ async def outer():
 """
     violations = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-003"]
     assert len(violations) == 0
+
+
+def test_003_suggested_fix_uses_real_coroutine_call():
+    src = """
+import asyncio
+async def bad():
+    asyncio.run(some_coroutine(1, 2))
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == "await some_coroutine(1, 2)"
 
 
 # ─── PYVIBE-004 ──────────────────────────────────────────────────────────────
@@ -396,6 +429,31 @@ async def async_process(path):
     assert len(violations) == 0
 
 
+def test_007_suggested_fix_unpacks_list_literal_for_run():
+    src = """
+import subprocess
+async def process_file(path):
+    subprocess.run(["ffmpeg", "-i", path, "output.mp4"])
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == (
+        'proc = await asyncio.create_subprocess_exec("ffmpeg", "-i", path, "output.mp4")\n'
+        "stdout, stderr = await proc.communicate()"
+    )
+
+
+def test_007_suggested_fix_for_popen():
+    src = """
+import subprocess
+async def get_output():
+    proc = subprocess.Popen(["git", "log"], stdout=-1)
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == (
+        'proc = await asyncio.create_subprocess_exec("git", "log")'
+    )
+
+
 # ─── PYVIBE-008 ──────────────────────────────────────────────────────────────
 
 def test_008_detects_sqlite3_connect_in_async():
@@ -431,6 +489,17 @@ async def async_get_users():
 """
     violations = analyze_source(src)
     assert len(violations) == 0
+
+
+def test_008_suggested_fix_uses_real_args():
+    src = """
+import sqlite3
+async def get_users():
+    conn = sqlite3.connect("db.sqlite3")
+    return conn.cursor().fetchall()
+"""
+    violations = analyze_source(src)
+    assert violations[0].suggested_fix == 'async with aiosqlite.connect("db.sqlite3") as db:'
 
 
 # ─── PYVIBE-009 ──────────────────────────────────────────────────────────────

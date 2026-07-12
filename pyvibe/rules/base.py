@@ -11,6 +11,7 @@ class Violation:
     function_name: str
     message: str
     evidence: str
+    suggested_fix: Optional[str] = None
 
 
 class AsyncContextVisitor(ast.NodeVisitor):

@@ -1,5 +1,6 @@
 import ast
-from typing import List, Set
+from typing import List, Optional, Set
+from pyvibe.autofix import render_call_args
 from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 REQUESTS_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "request"}
@@ -19,8 +20,9 @@ class AsyncRequestsRule(AsyncBlockingCallVisitor):
     RULE_ID = "PYVIBE-002"
     SEVERITY = "CRITICAL"
 
-    def __init__(self):
+    def __init__(self, source: Optional[str] = None):
         super().__init__()
+        self._source = source
         # Names bound to the `requests` module via `import requests [as X]`
         self._requests_aliases: Set[str] = set()
 
@@ -44,9 +46,19 @@ class AsyncRequestsRule(AsyncBlockingCallVisitor):
                 function_name=self._current_async_func,
                 message=f"requests.{method}() is synchronous — blocks the event loop",
                 evidence=f"Use `async with httpx.AsyncClient() as c: await c.{method}(url)`",
+                suggested_fix=self._suggest_fix(node, method),
             ))
 
         self.generic_visit(node)
+
+    def _suggest_fix(self, node: ast.Call, method: str) -> Optional[str]:
+        if not self._source:
+            return None
+        args_src = render_call_args(self._source, node)
+        return (
+            "async with httpx.AsyncClient() as client:\n"
+            f"    response = await client.{method}({args_src})"
+        )
 
     def _get_requests_method(self, node: ast.Call):
         # requests.get(...), requests.post(...), etc. — qualified form only.

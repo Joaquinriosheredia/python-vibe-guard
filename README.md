@@ -169,22 +169,29 @@ python -m pyvibe explain PYVIBE-002
 
   demo/bad_async.py
 
-  [CRITICAL] [PYVIBE-001] — line 14
+  [CRITICAL] [PYVIBE-001] — line 27
      Function : process_order()
      Problem  : time.sleep() blocks the entire event loop
      Fix      : Use `await asyncio.sleep(n)` instead
+     Suggested fix:
+         await asyncio.sleep(2)
 
-  [CRITICAL] [PYVIBE-002] — line 20
+  [CRITICAL] [PYVIBE-002] — line 33
      Function : fetch_user()
      Problem  : requests.get() is synchronous — blocks the event loop
      Fix      : Use `async with httpx.AsyncClient() as c: await c.get(url)`
+     Suggested fix:
+         async with httpx.AsyncClient() as client:
+             response = await client.get(f"https://api.example.com/users/{user_id}")
 
-  [CRITICAL] [PYVIBE-003] — line 26
+  [CRITICAL] [PYVIBE-003] — line 39
      Function : orchestrate()
      Problem  : asyncio.run() inside async def raises RuntimeError at runtime
      Fix      : Use `await coroutine()` directly — asyncio.run() is for sync entrypoints only
+     Suggested fix:
+         await process_order(42)
 
-  [CRITICAL] [PYVIBE-004] — line 32
+  [CRITICAL] [PYVIBE-004] — line 45
      Function : update_counter()
      Problem  : threading.Lock() blocks the event loop under contention
      Fix      : Use `asyncio.Lock()` with `async with lock:` instead
@@ -192,6 +199,10 @@ python -m pyvibe explain PYVIBE-002
   ─────────────────────────────────────────────
   4 violation(s) in 1 file(s)
 ```
+
+`Suggested fix:` blocks are generated from the real code on the flagged line — they are
+printed to the terminal / JSON output only and are never written back to your files.
+Currently available for PYVIBE-001, 002, 003, 007, and 008.
 
 ### `pyvibe explain`
 

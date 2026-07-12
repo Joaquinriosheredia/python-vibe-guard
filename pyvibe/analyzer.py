@@ -49,6 +49,17 @@ ALL_RULES = [
 
 ALL_RULE_IDS: FrozenSet[str] = frozenset(r.RULE_ID for r in ALL_RULES)
 
+# Rules that build a concrete "Suggested fix" snippet from the real source
+# text (see pyvibe/autofix.py) and therefore need the full source passed
+# into their constructor.
+_NEEDS_SOURCE: FrozenSet[type] = frozenset({
+    AsyncSleepRule,
+    AsyncRequestsRule,
+    AsyncioRunRule,
+    SubprocessAsyncRule,
+    SqliteAsyncRule,
+})
+
 # Rules downgraded CRITICAL → WARNING when the violation is inside a test file.
 # time.sleep in fixtures, subprocess in service-startup helpers, open() in
 # async test helpers (e.g. asyncssh, aiofiles own test suites), and Celery task
@@ -101,6 +112,8 @@ def analyze_source(
     for RuleClass in ALL_RULES:
         if RuleClass is SilentExceptRule:
             visitor = RuleClass(source_lines)
+        elif RuleClass in _NEEDS_SOURCE:
+            visitor = RuleClass(source)
         else:
             visitor = RuleClass()
         visitor.visit(tree)

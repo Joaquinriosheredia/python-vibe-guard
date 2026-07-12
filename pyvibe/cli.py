@@ -132,6 +132,7 @@ def main():
                     "function": v.function_name,
                     "message": v.message,
                     "evidence": v.evidence,
+                    "suggested_fix": v.suggested_fix,
                 })
         print(json.dumps(output, indent=2))
     else:
@@ -160,6 +161,10 @@ def _print_human(file_results: dict, total_violations: int, total_files: int):
             print(f"     Function : {v.function_name}()")
             print(f"     Problem  : {v.message}")
             print(f"     Fix      : {v.evidence}")
+            if v.suggested_fix:
+                print("     Suggested fix:")
+                for line in v.suggested_fix.splitlines():
+                    print(f"         {line}")
             print()
 
     print("  ─────────────────────────────────────────────")

@@ -1,5 +1,6 @@
 import ast
-from typing import List, Set
+from typing import List, Optional, Set
+from pyvibe.autofix import render_call_args
 from pyvibe.rules.base import Violation, AsyncBlockingCallVisitor
 
 
@@ -17,8 +18,9 @@ class SqliteAsyncRule(AsyncBlockingCallVisitor):
     RULE_ID = "PYVIBE-008"
     SEVERITY = "CRITICAL"
 
-    def __init__(self):
+    def __init__(self, source: Optional[str] = None):
         super().__init__()
+        self._source = source
         # Names bound to the `sqlite3` module via `import sqlite3 [as X]`
         self._sqlite3_aliases: Set[str] = set()
         # Names imported directly from sqlite3: `from sqlite3 import connect`
@@ -50,9 +52,16 @@ class SqliteAsyncRule(AsyncBlockingCallVisitor):
                 function_name=self._current_async_func,
                 message="sqlite3.connect() is synchronous — blocks the event loop during I/O",
                 evidence="Use `async with aiosqlite.connect('db.sqlite3') as db:` instead",
+                suggested_fix=self._suggest_fix(node),
             ))
 
         self.generic_visit(node)
+
+    def _suggest_fix(self, node: ast.Call) -> Optional[str]:
+        if not self._source:
+            return None
+        args_src = render_call_args(self._source, node)
+        return f"async with aiosqlite.connect({args_src}) as db:"
 
     def _is_sqlite_connect(self, node: ast.Call) -> bool:
         # sqlite3.connect(...)
