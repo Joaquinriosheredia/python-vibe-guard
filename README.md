@@ -165,6 +165,11 @@ python -m pyvibe src/ --baseline          # only reports findings NOT in the bas
 # Show suppressed findings (inline comments + pyvibe.toml) alongside the report
 python -m pyvibe src/ --verbose
 
+# Audit inline suppressions: justification coverage + orphaned (unused) suppressions
+python -m pyvibe audit src/
+python -m pyvibe audit src/ --json
+python -m pyvibe audit src/ --fail-on-unused --fail-on-unjustified
+
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
 
@@ -298,6 +303,14 @@ conn = sqlite3.connect(...)              # suppressed — always targets the nex
 `pyvibe:` is case-insensitive. A directive with no recognizable `PYVIBE-XXX` id is ignored
 (treated as a regular comment).
 
+Add an optional justification after `--` — it's free text, stored and shown in `pyvibe audit`:
+
+```python
+conn = sqlite3.connect(...)  # pyvibe: ignore PYVIBE-008 -- legacy sqlite wrapper
+# pyvibe: ignore-next-line PYVIBE-008 -- startup only
+conn = sqlite3.connect(...)
+```
+
 For project-wide rules, add a `pyvibe.toml` next to your code (python-vibe-guard walks up
 from the scan target to find it, same convention as `pyproject.toml`):
 
@@ -329,6 +342,44 @@ Add `--verbose` to see exactly what was suppressed and why:
     PYVIBE-008 app/db.py:42 (inline)
     PYVIBE-019 legacy.py:81 (config)
 ```
+
+### `pyvibe audit`
+
+Audits every inline `# pyvibe: ignore` comment in a codebase: how many carry a justification,
+and how many are **orphaned** — the rule they name never actually fires on the target line,
+usually because the underlying code changed since the suppression was added.
+
+```
+$ pyvibe audit src/
+
+Suppressions audit
+──────────────────
+Total suppressions: 12
+With justification: 9 (75%)
+Without justification: 3
+Unused (no violation found): 2
+
+By rule:
+PYVIBE-008   5
+PYVIBE-019   4
+PYVIBE-003   3
+
+Unused suppressions:
+app/legacy.py:41  # pyvibe: ignore PYVIBE-008
+
+Without justification:
+models/db.py:88  # pyvibe: ignore PYVIBE-019
+```
+
+- `--json` — machine-readable output (`total`, `with_justification`, `without_justification`,
+  `unused`, `by_rule`, `unused_suppressions`, `without_justification_suppressions`).
+- `--fail-on-unused` — exit `1` if any orphaned suppression is found.
+- `--fail-on-unjustified` — exit `1` if any suppression is missing a justification.
+- `--max-unused N` — exit `1` if more than `N` orphaned suppressions are found.
+- `--exclude DIR` — same directory-exclusion convention as `pyvibe scan`.
+
+With no flags, `pyvibe audit` is purely informational (exit `0`) — the flags above are what
+you wire into CI to enforce a justification/cleanup policy over time.
 
 ---
 
@@ -427,7 +478,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-309 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, and suppressions (inline comments + pyvibe.toml) coverage.
+331 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
 
 ---
 

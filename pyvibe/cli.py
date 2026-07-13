@@ -16,11 +16,13 @@ Usage:
     python -m pyvibe <path> --baseline        # scan, suppressing findings already in the baseline
     python -m pyvibe scan <path> --baseline   # equivalent, explicit subcommand form
     python -m pyvibe <path> --verbose         # also list suppressed findings (inline / pyvibe.toml)
+    python -m pyvibe audit [path]             # audit inline suppressions: justification + orphan usage
 
 Suppressing findings:
     # pyvibe: ignore PYVIBE-008              (same line, or the next non-comment line if standalone)
     # pyvibe: ignore PYVIBE-008, PYVIBE-003  (multiple rules)
     # pyvibe: ignore-next-line PYVIBE-008    (always the next line)
+    # pyvibe: ignore PYVIBE-008 -- reason    (optional justification, shown in `pyvibe audit`)
 See pyvibe.toml for project-wide ignore / exclude / severity overrides.
 """
 import argparse
@@ -59,6 +61,10 @@ def main():
 
     if len(sys.argv) > 1 and sys.argv[1] == "scan":
         _main_scan(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "audit":
+        _main_audit(sys.argv[2:])
         return
 
     parser = argparse.ArgumentParser(
@@ -516,6 +522,134 @@ def _main_baseline(argv):
     verb = "created" if args.action == "create" else "updated"
     print(f"Baseline {verb}: {total_findings} findings saved to {args.baseline_path}")
     sys.exit(0)
+
+
+def _main_audit(argv):
+    parser = argparse.ArgumentParser(
+        prog="pyvibe audit",
+        description="Audit inline `# pyvibe: ignore` suppressions: justification coverage + orphaned (unused) suppressions",
+    )
+    parser.add_argument("path", nargs="?", default=".", help="File or directory to audit (default: current directory)")
+    parser.add_argument(
+        "--exclude",
+        metavar="DIR",
+        action="append",
+        default=[],
+        help="Directory name to exclude (can be repeated)",
+    )
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--fail-on-unused",
+        action="store_true",
+        help="Exit 1 if any orphaned suppression is found (no violation on its target line)",
+    )
+    parser.add_argument(
+        "--fail-on-unjustified",
+        action="store_true",
+        help="Exit 1 if any suppression is missing a `-- justification`",
+    )
+    parser.add_argument(
+        "--max-unused",
+        metavar="N",
+        type=int,
+        default=None,
+        help="Exit 1 if more than N orphaned suppressions are found",
+    )
+    args = parser.parse_args(argv)
+
+    from pyvibe.audit import audit_path, summarize
+
+    target = Path(args.path)
+    if not target.exists():
+        print(f"Error: {target} does not exist", file=sys.stderr)
+        sys.exit(2)
+
+    config = _load_config_or_exit(target)
+    exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
+
+    records = audit_path(target, exclude=exclude, config=config)
+    summary = summarize(records)
+
+    if args.json:
+        _print_audit_json(summary)
+    else:
+        _print_audit_human(summary)
+
+    failed = (
+        (args.fail_on_unused and summary.unused > 0)
+        or (args.fail_on_unjustified and summary.without_justification > 0)
+        or (args.max_unused is not None and summary.unused > args.max_unused)
+    )
+    sys.exit(1 if failed else 0)
+
+
+def _format_directive(record) -> str:
+    return f"# pyvibe: {record.directive} {record.rule_id}"
+
+
+def _print_audit_human(summary):
+    print()
+    title = "Suppressions audit"
+    print(title)
+    print("─" * len(title))
+
+    if summary.total == 0:
+        print("No suppressions found.")
+        print()
+        return
+
+    pct = round(summary.with_justification / summary.total * 100)
+    print(f"Total suppressions: {summary.total}")
+    print(f"With justification: {summary.with_justification} ({pct}%)")
+    print(f"Without justification: {summary.without_justification}")
+    print(f"Unused (no violation found): {summary.unused}")
+    print()
+
+    print("By rule:")
+    for rule_id, count in summary.by_rule.items():
+        print(f"{rule_id:<12} {count}")
+    print()
+
+    if summary.unused_records:
+        print("Unused suppressions:")
+        for r in summary.unused_records:
+            print(f"{r.filepath}:{r.comment_line}  {_format_directive(r)}")
+        print()
+
+    if summary.unjustified_records:
+        print("Without justification:")
+        for r in summary.unjustified_records:
+            print(f"{r.filepath}:{r.comment_line}  {_format_directive(r)}")
+        print()
+
+
+def _print_audit_json(summary):
+    output = {
+        "total": summary.total,
+        "with_justification": summary.with_justification,
+        "without_justification": summary.without_justification,
+        "unused": summary.unused,
+        "by_rule": summary.by_rule,
+        "unused_suppressions": [
+            {
+                "file": r.filepath,
+                "line": r.comment_line,
+                "rule_id": r.rule_id,
+                "justification": r.justification,
+            }
+            for r in summary.unused_records
+        ],
+        "without_justification_suppressions": [
+            {
+                "file": r.filepath,
+                "line": r.comment_line,
+                "rule_id": r.rule_id,
+                "justification": r.justification,
+            }
+            for r in summary.unjustified_records
+        ],
+    }
+    print(json.dumps(output, indent=2))
 
 
 def _main_explain(argv):
