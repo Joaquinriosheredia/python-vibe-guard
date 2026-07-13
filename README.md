@@ -162,6 +162,9 @@ python -m pyvibe explain PYVIBE-002
 python -m pyvibe baseline create src/     # snapshot current findings
 python -m pyvibe src/ --baseline          # only reports findings NOT in the baseline
 
+# Show suppressed findings (inline comments + pyvibe.toml) alongside the report
+python -m pyvibe src/ --verbose
+
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
 
@@ -201,7 +204,7 @@ python -m pyvibe src/ --baseline          # only reports findings NOT in the bas
      Fix      : Use `asyncio.Lock()` with `async with lock:` instead
 
   ─────────────────────────────────────────────
-  4 violation(s) in 1 file(s)
+  4 reported · 0 suppressed
 ```
 
 `Suggested fix:` blocks are generated from the real code on the flagged line — they are
@@ -275,6 +278,57 @@ produces exit code `0`.
 `.gitignore` is up to your team. Commit it if you want the accepted-debt snapshot shared
 and reviewed like any other file; gitignore it if each contributor/CI run should
 regenerate its own baseline instead.
+
+### Suppressing findings
+
+For one-off exceptions, use an inline comment right in the source:
+
+```python
+# pyvibe: ignore PYVIBE-008
+conn = sqlite3.connect(...)              # suppressed — standalone comment targets the next line
+
+conn = sqlite3.connect(...)  # pyvibe: ignore PYVIBE-008   # suppressed — trailing comment targets its own line
+
+time.sleep(n)  # pyvibe: ignore PYVIBE-001, PYVIBE-003     # multiple rules, comma-separated
+
+# pyvibe: ignore-next-line PYVIBE-008
+conn = sqlite3.connect(...)              # suppressed — always targets the next line
+```
+
+`pyvibe:` is case-insensitive. A directive with no recognizable `PYVIBE-XXX` id is ignored
+(treated as a regular comment).
+
+For project-wide rules, add a `pyvibe.toml` next to your code (python-vibe-guard walks up
+from the scan target to find it, same convention as `pyproject.toml`):
+
+```toml
+[tool.pyvibe]
+ignore = ["PYVIBE-019"]
+exclude = ["tests/**", "examples/**", "docs/**"]
+
+[tool.pyvibe.severity]
+PYVIBE-008 = "warning"
+```
+
+- `ignore`: rule IDs suppressed everywhere, project-wide.
+- `exclude`: glob patterns (relative to the `pyvibe.toml` directory) for files/directories
+  to skip entirely.
+- `[tool.pyvibe.severity]`: per-rule severity override (`"critical"` or `"warning"`),
+  applied after the built-in test-file downgrade.
+
+Both mechanisms feed into the same summary line:
+
+```
+  4 reported · 2 suppressed
+```
+
+Add `--verbose` to see exactly what was suppressed and why:
+
+```
+  Suppressed:
+    PYVIBE-008 app/db.py:42 (inline)
+    PYVIBE-019 legacy.py:81 (config)
+```
 
 ---
 
@@ -373,7 +427,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-268 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, and baseline mode coverage.
+309 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, and suppressions (inline comments + pyvibe.toml) coverage.
 
 ---
 

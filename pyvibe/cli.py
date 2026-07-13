@@ -15,22 +15,33 @@ Usage:
     python -m pyvibe baseline update [path]   # overwrite the existing baseline
     python -m pyvibe <path> --baseline        # scan, suppressing findings already in the baseline
     python -m pyvibe scan <path> --baseline   # equivalent, explicit subcommand form
+    python -m pyvibe <path> --verbose         # also list suppressed findings (inline / pyvibe.toml)
+
+Suppressing findings:
+    # pyvibe: ignore PYVIBE-008              (same line, or the next non-comment line if standalone)
+    # pyvibe: ignore PYVIBE-008, PYVIBE-003  (multiple rules)
+    # pyvibe: ignore-next-line PYVIBE-008    (always the next line)
+See pyvibe.toml for project-wide ignore / exclude / severity overrides.
 """
 import argparse
 import json
 import sys
 from pathlib import Path
+from typing import List, Tuple
 
 from pyvibe import __version__
 from pyvibe.analyzer import (
     analyze_file,
+    analyze_file_full,
     analyze_directory,
+    analyze_directory_full,
     DEFAULT_EXCLUDES,
     ALL_RULE_IDS,
     TEST_FILE_DOWNGRADE,
     _is_test_file,
 )
 from pyvibe.baseline import DEFAULT_BASELINE_PATH
+from pyvibe.config import is_excluded
 
 
 def main():
@@ -106,27 +117,46 @@ def main():
         default=DEFAULT_BASELINE_PATH,
         help=f"Path to the baseline file (default: {DEFAULT_BASELINE_PATH})",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Also list suppressed findings (inline `# pyvibe: ignore` comments and pyvibe.toml)",
+    )
     args = parser.parse_args()
 
-    file_results = _resolve_file_results(args)
+    file_results, suppressed = _resolve_file_results(args)
     file_results = _apply_baseline_filter(args, file_results)
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
 
-    _emit_scan_output(args, file_results, total_violations, total_files)
+    _emit_scan_output(args, file_results, total_violations, total_files, suppressed)
 
     sys.exit(1 if total_violations > 0 else 0)
 
 
-def _resolve_file_results(args) -> dict:
+def _load_config_or_exit(path):
+    from pyvibe.config import ConfigError, load_config
+
+    try:
+        return load_config(Path(path))
+    except ConfigError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _resolve_file_results(args) -> Tuple[dict, List[Tuple[Path, object, str]]]:
     """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
 
+    Returns (file_results, suppressed) — suppressed is a flat list of
+    (path, Violation, reason) tuples, reason being "inline" or "config".
     Expects args.path/.exclude/.no_test_files/.downgrade_in_tests.
     """
     target = Path(args.path)
     if not target.exists():
         print(f"Error: {target} does not exist", file=sys.stderr)
         sys.exit(2)
+
+    config = _load_config_or_exit(target)
 
     exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
 
@@ -143,16 +173,23 @@ def _resolve_file_results(args) -> dict:
 
     if target.is_file():
         if target.suffix != ".py":
-            return {}
+            return {}, []
         if skip_test_files and _is_test_file(str(target)):
-            return {}
-        return {target: analyze_file(target, downgrade_in_tests=downgrade_in_tests)}
+            return {}, []
+        if config and is_excluded(target, config):
+            return {}, []
+        reported, suppressed = analyze_file_full(
+            target, downgrade_in_tests=downgrade_in_tests, config=config
+        )
+        file_results = {target: reported} if reported else {}
+        return file_results, [(target, v, reason) for v, reason in suppressed]
 
-    return analyze_directory(
+    return analyze_directory_full(
         target,
         exclude=exclude,
         skip_test_files=skip_test_files,
         downgrade_in_tests=downgrade_in_tests,
+        config=config,
     )
 
 
@@ -174,10 +211,10 @@ def _apply_baseline_filter(args, file_results: dict) -> dict:
     return filter_new_violations(file_results, baseline)
 
 
-def _emit_scan_output(args, file_results: dict, total_violations: int, total_files: int):
+def _emit_scan_output(args, file_results: dict, total_violations: int, total_files: int, suppressed: list):
     """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
 
-    Expects args.sarif/.sarif_output/.json.
+    Expects args.sarif/.sarif_output/.json/.verbose.
     """
     if args.sarif:
         from pyvibe.sarif import write_sarif
@@ -201,16 +238,18 @@ def _emit_scan_output(args, file_results: dict, total_violations: int, total_fil
                 })
         print(json.dumps(output, indent=2))
     else:
-        _print_human(file_results, total_violations, total_files)
+        _print_human(file_results, total_violations, total_files, suppressed, verbose=args.verbose)
 
 
-def _print_human(file_results: dict, total_violations: int, total_files: int):
+def _print_human(
+    file_results: dict, total_violations: int, total_files: int, suppressed: list, verbose: bool = False
+):
     print()
     print("  python-vibe-guard")
     print("  ─────────────────────────────────────────────")
     print()
 
-    if not file_results:
+    if not file_results and not suppressed:
         print("  No violations found\n")
         return
 
@@ -230,8 +269,14 @@ def _print_human(file_results: dict, total_violations: int, total_files: int):
                     print(f"         {line}")
             print()
 
+    if verbose and suppressed:
+        print("  Suppressed:")
+        for path, v, reason in suppressed:
+            print(f"    {v.rule_id} {path}:{v.line} ({reason})")
+        print()
+
     print("  ─────────────────────────────────────────────")
-    print(f"  {total_violations} violation(s) in {total_files} file(s)")
+    print(f"  {total_violations} reported · {len(suppressed)} suppressed")
     print()
 
 
@@ -271,12 +316,16 @@ def _main_review(argv):
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(2)
 
+    config = _load_config_or_exit(repo_root)
+
     file_results = {}
     for rel_path, added_lines in changed.items():
         abs_path = repo_root / rel_path
         if not abs_path.exists():
             continue
-        violations = analyze_file(abs_path, line_filter=added_lines)
+        if config and is_excluded(abs_path, config):
+            continue
+        violations = analyze_file(abs_path, line_filter=added_lines, config=config)
         if violations:
             file_results[rel_path] = violations
 
@@ -388,15 +437,20 @@ def _main_scan(argv):
         default=DEFAULT_BASELINE_PATH,
         help=f"Path to the baseline file (default: {DEFAULT_BASELINE_PATH})",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Also list suppressed findings (inline `# pyvibe: ignore` comments and pyvibe.toml)",
+    )
     args = parser.parse_args(argv)
 
-    file_results = _resolve_file_results(args)
+    file_results, suppressed = _resolve_file_results(args)
     file_results = _apply_baseline_filter(args, file_results)
 
     total_violations = sum(len(v) for v in file_results.values())
     total_files = sum(1 for v in file_results.values() if v)
 
-    _emit_scan_output(args, file_results, total_violations, total_files)
+    _emit_scan_output(args, file_results, total_violations, total_files, suppressed)
 
     sys.exit(1 if total_violations > 0 else 0)
 
@@ -437,6 +491,7 @@ def _main_baseline(argv):
         print(f"Error: {target} does not exist", file=sys.stderr)
         sys.exit(2)
 
+    config = _load_config_or_exit(target)
     exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
 
     if target.is_file():
@@ -444,10 +499,14 @@ def _main_baseline(argv):
             file_results = {}
         elif args.no_test_files and _is_test_file(str(target)):
             file_results = {}
+        elif config and is_excluded(target, config):
+            file_results = {}
         else:
-            file_results = {target: analyze_file(target)}
+            file_results = {target: analyze_file(target, config=config)}
     else:
-        file_results = analyze_directory(target, exclude=exclude, skip_test_files=args.no_test_files)
+        file_results = analyze_directory(
+            target, exclude=exclude, skip_test_files=args.no_test_files, config=config
+        )
 
     from pyvibe.baseline import write_baseline
 

@@ -8,6 +8,9 @@ version = "0.11.0"
 description = "Runtime anti-pattern scanner for async Python — detects what AI-generated code gets wrong"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "tomli>=2.0.1; python_version < '3.11'",
+]
 license = {text = "MIT"}
 keywords = ["async", "linter", "fastapi", "asyncio", "static-analysis"]
 classifiers = [

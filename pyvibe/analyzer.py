@@ -1,8 +1,10 @@
 import ast
 from pathlib import Path
-from typing import FrozenSet, List, Optional
+from typing import FrozenSet, List, Optional, Tuple
 
+from pyvibe.config import PyvibeConfig, is_excluded
 from pyvibe.rules.base import Violation
+from pyvibe.suppressions import parse_inline_suppressions
 from pyvibe.rules.async_sleep import AsyncSleepRule
 from pyvibe.rules.async_requests import AsyncRequestsRule
 from pyvibe.rules.asyncio_run import AsyncioRunRule
@@ -90,22 +92,29 @@ def _is_test_file(filepath: str) -> bool:
     )
 
 
-def analyze_source(
+def analyze_source_full(
     source: str,
     filepath: str = "<string>",
     *,
     downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
-) -> List[Violation]:
-    """Parse source and run all rules. Returns list of violations.
+    config: Optional[PyvibeConfig] = None,
+) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
+    """Parse source and run all rules. Returns (reported, suppressed) where
+    suppressed is a list of (Violation, reason) with reason "inline" (a
+    `# pyvibe: ignore ...` comment) or "config" (pyvibe.toml's [tool.pyvibe]
+    ignore list).
 
     downgrade_in_tests: rule IDs whose severity is lowered to WARNING when
     the file is detected as a test file. Pass frozenset() to disable all
     downgrading, or ALL_RULE_IDS to downgrade every rule.
+
+    config: optional PyvibeConfig (see pyvibe/config.py) applying a global
+    ignore list and per-rule severity overrides on top of the above.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return []
+        return [], []
 
     source_lines = source.splitlines()
     violations = []
@@ -124,8 +133,53 @@ def analyze_source(
             if v.rule_id in downgrade_in_tests:
                 v.severity = "WARNING"
 
+    if config and config.severity:
+        for v in violations:
+            if v.rule_id in config.severity:
+                v.severity = config.severity[v.rule_id]
+
     violations.sort(key=lambda v: v.line)
-    return violations
+
+    inline_suppressions = parse_inline_suppressions(source)
+    reported: List[Violation] = []
+    suppressed: List[Tuple[Violation, str]] = []
+    for v in violations:
+        if v.rule_id in inline_suppressions.get(v.line, frozenset()):
+            suppressed.append((v, "inline"))
+        elif config and v.rule_id in config.ignore:
+            suppressed.append((v, "config"))
+        else:
+            reported.append(v)
+
+    return reported, suppressed
+
+
+def analyze_source(
+    source: str,
+    filepath: str = "<string>",
+    *,
+    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    config: Optional[PyvibeConfig] = None,
+) -> List[Violation]:
+    """Parse source and run all rules. Returns the reported (non-suppressed)
+    violations — see analyze_source_full() for the suppressed ones too.
+    """
+    reported, _ = analyze_source_full(
+        source, filepath, downgrade_in_tests=downgrade_in_tests, config=config
+    )
+    return reported
+
+
+def analyze_file_full(
+    path: Path,
+    *,
+    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    config: Optional[PyvibeConfig] = None,
+) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
+    source = path.read_text(encoding="utf-8", errors="ignore")
+    return analyze_source_full(
+        source, filepath=str(path), downgrade_in_tests=downgrade_in_tests, config=config
+    )
 
 
 def analyze_file(
@@ -133,12 +187,15 @@ def analyze_file(
     *,
     downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
     line_filter: Optional[FrozenSet[int]] = None,
+    config: Optional[PyvibeConfig] = None,
 ) -> List[Violation]:
     """line_filter: if given, only violations whose `line` is in this set
     are returned (used by `pyvibe review` to report only diff-touched lines).
     """
     source = path.read_text(encoding="utf-8", errors="ignore")
-    violations = analyze_source(source, filepath=str(path), downgrade_in_tests=downgrade_in_tests)
+    violations = analyze_source(
+        source, filepath=str(path), downgrade_in_tests=downgrade_in_tests, config=config
+    )
     if line_filter is not None:
         violations = [v for v in violations if v.line in line_filter]
     return violations
@@ -156,21 +213,53 @@ def analyze_directory(
     *,
     skip_test_files: bool = False,
     downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    config: Optional[PyvibeConfig] = None,
 ) -> dict:
     """Walk directory and analyze all .py files. Returns {path: [violations]}.
 
     Directories whose *name* appears in `exclude` are skipped entirely.
     skip_test_files: if True, files matching test_*.py / *_test.py / tests/* are
     omitted from results entirely rather than downgraded.
+    config: optional PyvibeConfig — files matching its exclude glob patterns
+    are also skipped entirely.
     """
     results = {}
     for py_file in _walk(root, exclude):
         if skip_test_files and _is_test_file(str(py_file)):
             continue
-        violations = analyze_file(py_file, downgrade_in_tests=downgrade_in_tests)
+        if config and is_excluded(py_file, config):
+            continue
+        violations = analyze_file(py_file, downgrade_in_tests=downgrade_in_tests, config=config)
         if violations:
             results[py_file] = violations
     return results
+
+
+def analyze_directory_full(
+    root: Path,
+    exclude: frozenset = DEFAULT_EXCLUDES,
+    *,
+    skip_test_files: bool = False,
+    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    config: Optional[PyvibeConfig] = None,
+) -> Tuple[dict, List[Tuple[Path, Violation, str]]]:
+    """Like analyze_directory(), but also returns the suppressed findings
+    (across every scanned file) as a flat list of (path, Violation, reason).
+    """
+    results = {}
+    all_suppressed: List[Tuple[Path, Violation, str]] = []
+    for py_file in _walk(root, exclude):
+        if skip_test_files and _is_test_file(str(py_file)):
+            continue
+        if config and is_excluded(py_file, config):
+            continue
+        reported, suppressed = analyze_file_full(
+            py_file, downgrade_in_tests=downgrade_in_tests, config=config
+        )
+        if reported:
+            results[py_file] = reported
+        all_suppressed.extend((py_file, v, reason) for v, reason in suppressed)
+    return results, all_suppressed
 
 
 def _walk(root: Path, exclude: frozenset):
