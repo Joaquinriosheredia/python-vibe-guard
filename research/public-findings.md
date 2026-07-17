@@ -8,18 +8,26 @@ documentar casos reales, las conversaciones mantenidas con los proyectos y el
 resultado final. Incluye tanto hallazgos confirmados como casos donde el
 contexto cambió la prioridad o la decisión del equipo mantenedor.
 
-| Proyecto | Repo | Regla | Finding | Resultado | Fecha |
-|----------|------|-------|---------|-----------|-------|
-| IBM/mcp-context-forge | github.com/IBM/mcp-context-forge | PYVIBE-008 | sqlite3.connect() dentro de async def | Se abrió el PR #5628 para sustituir sqlite3 por aiosqlite. El equipo aclaró posteriormente que el código solo se utiliza para desarrollo/testing y decidió mantener baja prioridad. El caso queda documentado como ejemplo de contexto que afecta a la severidad. | 2026-07-15 |
-| MODSetter/SurfSense | github.com/MODSetter/SurfSense | PYVIBE-009 | open() bloqueante en agente TTS async | Issue abierto (#1603). Pendiente de respuesta del proyecto. | 2026-07-15 |
-| jumpserver/jumpserver | github.com/jumpserver/jumpserver | PYVIBE-005 | @shared_task sin time_limit en automatización de cuentas | Issue abierto (#17042). Pendiente de respuesta del proyecto. | 2026-07-15 |
+## Status legend
 
-## Philosophy
+- ✅ Accepted fix — maintainer merged or accepted the fix
+- 🟢 Confirmed by maintainer — maintainer confirmed the issue
+- 🟡 Intended design — pattern exists but was an intentional design decision
+- 🔵 False positive — detector was incorrect
+- ⚪ Pending — awaiting maintainer feedback
 
-- Every finding is manually reviewed before opening an issue.
-- Context always takes precedence over the rule.
-- False positives are documented publicly and used to improve future versions.
-- The objective is to reduce production risk, not maximize the number of findings.
+Every finding must include the public issue or PR link.
+
+| Project | Repository | Rule | Finding | Status | Reference | Date |
+|---------|------------|------|---------|--------|-----------|------|
+| IBM/mcp-context-forge | github.com/IBM/mcp-context-forge | PYVIBE-008 | Blocking sqlite3.connect() inside async flow | 🟡 PR #5628 opened, maintainer classified as dev/testing | #5627 / #5628 | 2026-07-15 |
+| MODSetter/SurfSense | github.com/MODSetter/SurfSense | PYVIBE-009 | Blocking open() inside async TTS agent | ⚪ Pending | issue #1603 | 2026-07-15 |
+| jumpserver/jumpserver | github.com/jumpserver/jumpserver | PYVIBE-005 | Celery task without time_limit | ⚪ Pending | issue #17042 | 2026-07-15 |
+| HOTOSM/tasking-manager | github.com/hotosm/tasking-manager | PYVIBE-001 | time.sleep() inside async _push_messages | ⚪ Pending (Linear TECH-1246) | issue #7303 | 2026-07-17 |
+| CenterForOpenScience/osf.io | github.com/CenterForOpenScience/osf.io | PYVIBE-005 | Celery task without time_limit in paginated SQL task | ⚪ Pending | issue #11816 | 2026-07-17 |
+| judahpaul16/gpt-home | github.com/judahpaul16/gpt-home | PYVIBE-012 | asyncio.create_task() without retained reference | ⚪ Pending | issue #122 | 2026-07-17 |
+| ronf/asyncssh | github.com/ronf/asyncssh | PYVIBE-009 | Blocking open() inside LocalFS.open() async method | ⚪ Pending | issue #824 | 2026-07-17 |
+| GACWR/OpenUBA | github.com/GACWR/OpenUBA | PYVIBE-001 | time.sleep() inside FastAPI async lifespan | ⚪ Pending | issue #140 | 2026-07-17 |
 
 ## Checklist before opening an issue
 
@@ -33,3 +41,10 @@ contexto cambió la prioridad o la decisión del equipo mantenedor.
 - [ ] Would I still open this issue if I had found it without python-vibe-guard?
 
 If any box is unchecked, postpone the issue until it can be answered.
+
+## Philosophy
+
+- Every finding is manually reviewed before opening an issue.
+- Context always takes precedence over the rule.
+- False positives are documented publicly and used to improve future versions.
+- The objective is to reduce production risk, not maximize the number of findings.
