@@ -20,3 +20,16 @@ contexto cambió la prioridad o la decisión del equipo mantenedor.
 - Context always takes precedence over the rule.
 - False positives are documented publicly and used to improve future versions.
 - The objective is to reduce production risk, not maximize the number of findings.
+
+## Checklist before opening an issue
+
+- [ ] Have I manually validated the finding?
+- [ ] Have I read the full file, not just the flagged line?
+- [ ] Have I checked where this code is called from?
+- [ ] Is this production code, development code, benchmark code, or test code?
+- [ ] Is there official documentation supporting the suggested fix?
+- [ ] Can I explain the real-world impact in 3 sentences?
+- [ ] Do I have a reasonable fix proposal?
+- [ ] Would I still open this issue if I had found it without python-vibe-guard?
+
+If any box is unchecked, postpone the issue until it can be answered.
