@@ -482,6 +482,12 @@ python tests/test_rules.py
 
 ---
 
+## Documentation
+
+- [research/public-findings.md](research/public-findings.md) — real findings reported to public open source projects, including confirmed cases and cases where context changed the outcome.
+
+---
+
 ## Ecosystem
 
 This project is part of the **vibe-guard** family of runtime anti-pattern scanners:
