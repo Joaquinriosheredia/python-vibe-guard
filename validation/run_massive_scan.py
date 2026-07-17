@@ -23,6 +23,9 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pyvibe import __version__ as PYVIBE_VERSION  # noqa: E402
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).parent.parent
@@ -61,18 +64,20 @@ def log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def gh_search(query: str, per_page: int = 100) -> list[dict]:
+def gh_search(query: str, page: int = 1, per_page: int = 100) -> list[dict]:
     """Call GitHub search/repositories via gh CLI. Returns list of repo dicts."""
     import urllib.parse
     encoded = urllib.parse.quote(query, safe="+:")
-    url = f"search/repositories?q={encoded}&sort=stars&order=desc&per_page={per_page}"
+    url = (f"search/repositories?q={encoded}&sort=stars&order=desc"
+           f"&per_page={per_page}&page={page}")
     try:
         result = subprocess.run(
             ["gh", "api", url],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
-            log(f"  [warn] gh api failed for query '{query[:60]}': {result.stderr.strip()[:100]}")
+            log(f"  [warn] gh api failed for query '{query[:60]}' page {page}: "
+                f"{result.stderr.strip()[:100]}")
             return []
         data = json.loads(result.stdout)
         return data.get("items", [])
@@ -81,22 +86,26 @@ def gh_search(query: str, per_page: int = 100) -> list[dict]:
         return []
 
 
-def collect_repos(target: int) -> list[dict]:
-    """Run all search queries, deduplicate, exclude reference set, cap at target."""
+def collect_repos(target: int, max_pages_per_query: int = 6) -> list[dict]:
+    """Run all search queries (paginated), deduplicate, exclude reference set, cap at target."""
     seen: dict[str, dict] = {}
 
     for i, query in enumerate(SEARCH_QUERIES):
-        if len(seen) >= target * 3:  # fetch 3× to have headroom after dedup
-            break
         log(f"  query {i+1}/{len(SEARCH_QUERIES)}: {query[:70]}...")
-        items = gh_search(query)
-        for item in items:
-            full_name = item["full_name"]
-            if full_name not in seen:
-                seen[full_name] = item
-        log(f"    → {len(items)} results, {len(seen)} unique so far")
-        if i < len(SEARCH_QUERIES) - 1:
-            time.sleep(2)  # stay within 30 req/min search rate limit
+        for page in range(1, max_pages_per_query + 1):
+            if len(seen) >= target * 3:  # fetch 3× to have headroom after dedup
+                break
+            items = gh_search(query, page=page)
+            for item in items:
+                full_name = item["full_name"]
+                if full_name not in seen:
+                    seen[full_name] = item
+            time.sleep(2.2)  # stay within 30 req/min search rate limit
+            if len(items) < 100:
+                break  # no more pages for this query
+        log(f"    → {len(seen)} unique so far")
+        if len(seen) >= target * 3:
+            break
 
     # Sort by stars desc, exclude reference repos, cap at target
     candidates = [r for r in seen.values() if r["full_name"] not in REFERENCE_REPOS]
@@ -198,7 +207,7 @@ def build_aggregate(scan_results: list[dict]) -> dict:
     ]
 
     return {
-        "version": "0.7.0",
+        "version": PYVIBE_VERSION,
         "scan_date": date.today().isoformat(),
         "total_repos": len(scan_results),
         "total_files": total_files,
@@ -295,6 +304,13 @@ def main() -> None:
             "files": py_files,
             "violations": violations,
         })
+
+        # Checkpoint every 100 processed repos so a crash/timeout doesn't lose progress
+        if len(scan_results) % 100 == 0:
+            checkpoint = build_aggregate(scan_results)
+            AGGREGATE_OUT.write_text(json.dumps(checkpoint, indent=2))
+            log(f"    [checkpoint] {len(scan_results)} repos scanned — "
+                f"aggregate.json written ({checkpoint['total_violations']} violations so far)")
 
     # ── 3. Aggregate ───────────────────────────────────────────────────────────
     log(f"\n[3/4] Aggregating results...")
