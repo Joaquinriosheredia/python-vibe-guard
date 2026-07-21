@@ -22,7 +22,7 @@ Every finding must include the public issue or PR link.
 |---------|------------|------|---------|--------|-----------|------|
 | IBM/mcp-context-forge | github.com/IBM/mcp-context-forge | PYVIBE-008 | Blocking sqlite3.connect() inside async flow | 🟡 PR #5628 opened, maintainer classified as dev/testing | #5627 / #5628 | 2026-07-15 |
 | MODSetter/SurfSense | github.com/MODSetter/SurfSense | PYVIBE-009 | Blocking open() inside async TTS agent | ⚪ Pending | issue #1603 | 2026-07-15 |
-| jumpserver/jumpserver | github.com/jumpserver/jumpserver | PYVIBE-005 | Celery task without time_limit | ⚪ Pending | issue #17042 | 2026-07-15 |
+| jumpserver/jumpserver | github.com/jumpserver/jumpserver | PYVIBE-005 | Celery task without time_limit | 🟡 Intended design — global Celery soft_time_limit of 3600s already exists; ansible worker uses threads pool which changes how task-level limits behave; fixed limit could break large-scale automation jobs. Finding documented as context-dependent. | issue #17042 | 2026-07-15 |
 | HOTOSM/tasking-manager | github.com/hotosm/tasking-manager | PYVIBE-001 | time.sleep() inside async _push_messages | ⚪ Pending (Linear TECH-1246) | issue #7303 | 2026-07-17 |
 | CenterForOpenScience/osf.io | github.com/CenterForOpenScience/osf.io | PYVIBE-005 | Celery task without time_limit in paginated SQL task | ⚪ Pending | issue #11816 | 2026-07-17 |
 | judahpaul16/gpt-home | github.com/judahpaul16/gpt-home | PYVIBE-012 | asyncio.create_task() without retained reference | ✅ Accepted fix — maintainer fixed in commit 41345b7 | issue #122 | 2026-07-17 |
