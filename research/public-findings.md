@@ -27,7 +27,7 @@ Every finding must include the public issue or PR link.
 | CenterForOpenScience/osf.io | github.com/CenterForOpenScience/osf.io | PYVIBE-005 | Celery task without time_limit in paginated SQL task | ⚪ Pending | issue #11816 | 2026-07-17 |
 | judahpaul16/gpt-home | github.com/judahpaul16/gpt-home | PYVIBE-012 | asyncio.create_task() without retained reference | ✅ Accepted fix — maintainer fixed in commit 41345b7 | issue #122 | 2026-07-17 |
 | ronf/asyncssh | github.com/ronf/asyncssh | PYVIBE-009 | Blocking open() inside LocalFS.open() async method | 🟡 Intended design — maintainer confirmed deliberate decision; sync open() preferred over executor overhead for local filesystems. aiofiles support planned but opt-in. | issue #824 | 2026-07-17 |
-| GACWR/OpenUBA | github.com/GACWR/OpenUBA | PYVIBE-001 | time.sleep() inside FastAPI async lifespan | ⚪ Pending | issue #140 | 2026-07-17 |
+| GACWR/OpenUBA | github.com/GACWR/OpenUBA | PYVIBE-001 | time.sleep() inside FastAPI async lifespan | ✅ Accepted fix — PR #142 opened by maintainer (fix: non-blocking asyncio.sleep in lifespan db-retry backoff) | issue #140 | 2026-07-17 |
 
 ## Checklist before opening an issue
 
