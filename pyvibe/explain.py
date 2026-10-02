@@ -18,22 +18,27 @@ _FP_SECTION_RE = re.compile(
 )
 _FP_PATTERN_NAME_RE = re.compile(r"\*\*([^*]+)\*\*\s*—")
 _VALID_RULE_ID_RE = re.compile(r"^PYVIBE-\d{3}$")
+# Same target as the SARIF helpUri (pyvibe/sarif.py): research/ is not in the wheel.
+REPORT_URL = "https://github.com/Joaquinriosheredia/python-vibe-guard/blob/master/research/accepted"
 
 
 class EvidenceNotFoundError(Exception):
     pass
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+def _evidence_root() -> Path:
+    # Packaged copy of research/ (see scripts/sync_evidence.py): present both
+    # in a source checkout and in an installed wheel, so explain works the
+    # same from PyPI as from the repo.
+    return Path(__file__).resolve().parent / "_evidence"
 
 
 def _accepted_path(rule_id: str) -> Path:
-    return _repo_root() / "research" / "accepted" / f"{rule_id}.md"
+    return _evidence_root() / "accepted" / f"{rule_id}.md"
 
 
 def _precision_audit_path() -> Path:
-    return _repo_root() / "research" / "precision-audit.md"
+    return _evidence_root() / "precision-audit.md"
 
 
 def normalize_rule_id(raw: str) -> str:
@@ -152,6 +157,6 @@ def explain_rule(raw_rule_id: str) -> str:
         "  Fix sugerido:",
         f"    {fix}",
         "",
-        f"  Full report: research/accepted/{rule_id}.md",
+        f"  Full report: {REPORT_URL}/{rule_id}.md",
     ]
     return "\n".join(lines)
