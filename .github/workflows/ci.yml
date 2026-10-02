@@ -30,3 +30,25 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  package-smoke:
+    # Build the wheel, install it into a clean venv and exercise the installed
+    # CLI from outside the repo — what `pip install python-vibe-guard` gives a
+    # user. Guards against artifact-only breakage like 0.12.1's `pyvibe explain`.
+    name: Packaged wheel smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build, install in a clean venv and smoke-test
+        run: scripts/smoke_wheel.sh dist
+
+      - name: Upload the tested artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-vibe-guard-dist
+          path: dist/
