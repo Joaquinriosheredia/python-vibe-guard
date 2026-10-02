@@ -156,3 +156,35 @@ def test_analyze_source_public_api_returns_only_reported():
     # ONLY the reported violations, exactly like before this feature existed.
     violations = analyze_source(TRAILING_SRC, filepath="app.py")
     assert violations == []
+
+
+# ─── PYVIBE-005: the suppression syntax the rule itself recommends works ────
+
+_CELERY_TASK = (
+    "from celery import shared_task\n"
+    "\n"
+    "@shared_task\n"
+    "def sync_task():{comment}\n"
+    "    pass\n"
+)
+
+
+def test_pyvibe005_recommended_suppression_on_def_line_suppresses():
+    src = _CELERY_TASK.format(comment="  # pyvibe: ignore PYVIBE-005")
+    reported, suppressed = analyze_source_full(src)
+    assert [v.rule_id for v in reported] == []
+    assert [v.rule_id for v, _ in suppressed] == ["PYVIBE-005"]
+
+
+def test_pyvibe005_noqa_is_not_a_pyvibe_suppression():
+    # `# noqa` belongs to flake8; pyvibe deliberately does not honor it, so no
+    # rule message may recommend it (it was recommended until 0.12.2).
+    src = _CELERY_TASK.format(comment="  # noqa: PYVIBE-005")
+    assert [v.rule_id for v in analyze_source(src)] == ["PYVIBE-005"]
+
+
+def test_no_rule_docstring_recommends_noqa():
+    from pyvibe.analyzer import ALL_RULES
+
+    for cls in ALL_RULES:
+        assert "noqa" not in (cls.__doc__ or ""), cls.RULE_ID

@@ -269,7 +269,7 @@ Opciones evaluadas:
 
 ### Qué se documentó
 
-1. **Docstring de `celery_time_limit.py`** — sección "Known limitation" explica el punto ciego y la recomendación (`# noqa: PYVIBE-005` o añadir per-task limits).
+1. **Docstring de `celery_time_limit.py`** — sección "Known limitation" explica el punto ciego y la recomendación (`# pyvibe: ignore PYVIBE-005` en la línea del `def` o añadir per-task limits).
 2. **README.md** — severity note para PYVIBE-005 advierte a usuarios con configuración global.
 3. **Este archivo** — decisión técnica documentada con razonamiento.
 
@@ -277,7 +277,7 @@ Opciones evaluadas:
 
 Si tu proyecto tiene `task_time_limit` configurado globalmente y recibes warnings innecesarios, dos opciones:
 - **Preferida:** añade `soft_time_limit` y `time_limit` per-task (autodocumenta expectativas de tiempo, inmune a drift de configuración)
-- **Supresión:** usa `# noqa: PYVIBE-005` en los tasks cubiertos por configuración global
+- **Supresión:** usa `# pyvibe: ignore PYVIBE-005` en la línea del `def` de los tasks cubiertos por configuración global (`# noqa` no lo reconoce pyvibe)
 
 ---
 
