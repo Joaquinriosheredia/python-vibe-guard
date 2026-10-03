@@ -63,7 +63,7 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 | PYVIBE-020 | `put_nowait()` without `asyncio.QueueFull` handler | any | `QueueFull` propagates unhandled; item is silently lost on bounded queues |
 
 **Severity notes:**
-- PYVIBE-005: `CRITICAL` — checks per-task decorator arguments only. **If your project sets a global `task_time_limit` via `app.conf.task_time_limit`, `app.conf.update(...)`, or in `celeryconfig.py` / `settings.py`, tasks already covered by that global limit will still be flagged.** Add per-task limits (self-documenting, immune to config drift) or suppress with `# noqa: PYVIBE-005`.
+- PYVIBE-005: `CRITICAL` — checks per-task decorator arguments only. **If your project sets a global `task_time_limit` via `app.conf.task_time_limit`, `app.conf.update(...)`, or in `celeryconfig.py` / `settings.py`, tasks already covered by that global limit will still be flagged.** Add per-task limits (self-documenting, immune to config drift) or suppress with `# pyvibe: ignore PYVIBE-005` on the task's `def` line.
 - PYVIBE-009: `CRITICAL` in production files; automatically downgraded to `WARNING` in test files (`test_*.py`, `*_test.py`, `tests/`). **Context matters:** `open()` in a hot-path request handler blocks all concurrent coroutines (CRITICAL); `open()` in a startup/lifespan function runs before requests are served and has zero practical impact. The rule cannot distinguish these contexts via AST — if you use `open()` in an `async def` lifespan or one-time initializer, the idiomatic fix is to use plain `def` instead (FastAPI's own docs do this), which avoids the flag entirely.
 - PYVIBE-017: bare `except` → `CRITICAL` (catches `KeyboardInterrupt`/`SystemExit`); `except Exception` with empty body → `WARNING`. Specific exceptions (`except ValueError: pass`) are not flagged.
 - PYVIBE-013 in test files: automatically downgraded to `WARNING` in files matching `test_*.py`, `*_test.py`, or paths under `tests/` — exceptions should propagate for assertions in test code.
@@ -435,7 +435,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.7.0
+    rev: v0.12.2
     hooks:
       - id: python-vibe-guard
 ```

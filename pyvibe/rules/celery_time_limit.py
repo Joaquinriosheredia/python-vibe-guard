@@ -25,7 +25,8 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
     current file.  Projects with a project-wide task_time_limit will see
     PYVIBE-005 warnings on tasks that are already covered by that global limit.
     If that applies to your project, either add per-task limits (preferred —
-    self-documenting, immune to config drift) or suppress with # noqa: PYVIBE-005.
+    self-documenting, immune to config drift) or suppress with
+    `# pyvibe: ignore PYVIBE-005` on the task's `def` line.
     """
 
     RULE_ID = "PYVIBE-005"
