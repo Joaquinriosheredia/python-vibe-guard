@@ -6,8 +6,7 @@
 
 A FastAPI service that handled 50 concurrent requests in staging started timing out in production at 200 rps. The team spent two days adding replicas, tweaking Gunicorn workers, and profiling CPU — nothing helped. The p99 latency was 8 seconds for an endpoint that should take 80ms.
 
-> Scenario based on a common pattern observed in async Python codebases.
-> Reproduced in controlled testing with locust against a FastAPI service.
+> Illustrative scenario, based on a common pattern in async Python codebases. The figures above are not measurements.
 
 Root cause: one engineer had asked an AI assistant to "add a retry with backoff" to an async handler. The AI generated `time.sleep(2)` inside the `async def`. In staging with a handful of requests it was invisible. In production it froze the entire event loop for 2 seconds per request, serializing all 200 concurrent calls through a single bottleneck.
 
@@ -115,7 +114,7 @@ Raw data: [`validation/breakdown.json`](validation/breakdown.json)
 
 **Notable findings:**
 
-- **home-assistant/core** — 418 violations across 17,702 files; 331 PYVIBE-013, 21 PYVIBE-018.
+- **home-assistant/core** — 491 violations across 17,702 files; 331 PYVIBE-013, 21 PYVIBE-018.
 - **Celery** — 352 tasks without `time_limit`; workers can hang indefinitely on broker timeouts.
 - **aiortc, anyio, uvicorn** — `while True` loops without `await` in production async I/O code (PYVIBE-018, 29 confirmed real hits after async-generator FP fix).
 - **aiohttp examples** — `open()` in async WebSocket handlers; synchronous I/O in production-facing code.
@@ -478,7 +477,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-331 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
+338 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
 
 ---
 
