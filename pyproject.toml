@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "python-vibe-guard"
 version = "0.12.2"
-description = "Runtime anti-pattern scanner for async Python — detects what AI-generated code gets wrong"
+description = "Runtime anti-pattern scanner for async Python: patterns that pass tests and fail in production under load, common in AI-generated code"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
