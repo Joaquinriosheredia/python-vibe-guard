@@ -434,7 +434,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.12.2
+    rev: v0.12.3
     hooks:
       - id: python-vibe-guard
 ```
