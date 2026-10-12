@@ -434,7 +434,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.12.3
+    rev: v0.12.4
     hooks:
       - id: python-vibe-guard
 ```
@@ -477,7 +477,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-338 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
+341 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
 
 ---
 

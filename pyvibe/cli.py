@@ -217,6 +217,11 @@ def _apply_baseline_filter(args, file_results: dict) -> dict:
     return filter_new_violations(file_results, baseline)
 
 
+def _note_sarif_written(args):
+    # With --json, stdout must hold only the JSON array (#5): the note goes to stderr.
+    print(f"SARIF results written to {args.sarif_output}", file=sys.stderr if args.json else sys.stdout)
+
+
 def _emit_scan_output(args, file_results: dict, total_violations: int, total_files: int, suppressed: list):
     """Shared by the bare `pyvibe <path>` command and `pyvibe scan`.
 
@@ -226,7 +231,7 @@ def _emit_scan_output(args, file_results: dict, total_violations: int, total_fil
         from pyvibe.sarif import write_sarif
 
         write_sarif(file_results, args.sarif_output)
-        print(f"SARIF results written to {args.sarif_output}")
+        _note_sarif_written(args)
 
     if args.json:
         output = []
@@ -341,7 +346,7 @@ def _main_review(argv):
         from pyvibe.sarif import write_sarif
 
         write_sarif(file_results, args.sarif_output)
-        print(f"SARIF results written to {args.sarif_output}")
+        _note_sarif_written(args)
 
     if args.json:
         output = []
