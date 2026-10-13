@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-vibe-guard"
-version = "0.12.3"
+version = "0.12.4"
 description = "Runtime anti-pattern scanner for async Python: patterns that pass tests and fail in production under load, common in AI-generated code"
 readme = "README.md"
 requires-python = ">=3.10"

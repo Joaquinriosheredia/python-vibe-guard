@@ -114,3 +114,30 @@ def test_cli_sarif_flag_clean_scan_exits_zero():
         sarif = json.loads(out.read_text())
         assert sarif["runs"][0]["results"] == []
         assert len(sarif["runs"][0]["tool"]["driver"]["rules"]) == 20
+
+
+def test_cli_json_with_sarif_keeps_stdout_pure_json():
+    # #5: the "SARIF results written" note went to stdout before the JSON array.
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "bad.py"
+        src.write_text(VIOLATION_SRC)
+        out = Path(tmp) / "out.sarif"
+
+        result = _run_cli([str(src), "--json", "--sarif", "--sarif-output", str(out)])
+        json_only = _run_cli([str(src), "--json"])
+
+        assert result.returncode == json_only.returncode == 1
+        assert json.loads(result.stdout) == json.loads(json_only.stdout)
+        assert "SARIF results written to" in result.stderr
+        assert json.loads(out.read_text())["runs"][0]["results"][0]["ruleId"] == "PYVIBE-001"
+
+
+def test_cli_sarif_without_json_still_notes_on_stdout():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "bad.py"
+        src.write_text(VIOLATION_SRC)
+        out = Path(tmp) / "out.sarif"
+
+        result = _run_cli([str(src), "--sarif", "--sarif-output", str(out)])
+
+        assert "SARIF results written to" in result.stdout

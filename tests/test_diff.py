@@ -302,3 +302,21 @@ def test_cli_review_invalid_base_exits_2(tmp_path):
     result = _run_cli(["review", "--base", "not-a-real-ref"], cwd=tmp_path)
     assert result.returncode == 2
     assert "Error" in result.stderr
+
+
+def test_cli_review_json_with_sarif_keeps_stdout_pure_json(tmp_path):
+    # #5, same note in `pyvibe review`.
+    _init_repo(tmp_path)
+    app = tmp_path / "app.py"
+    app.write_text("def handler():\n    pass\n")
+    _git(["add", "app.py"], tmp_path)
+    _git(["commit", "-q", "-m", "initial"], tmp_path)
+    app.write_text("import time\n\nasync def handler():\n    time.sleep(2)\n")
+    out = tmp_path / "out.sarif"
+
+    result = _run_cli(["review", "--base", "HEAD", "--json", "--sarif", "--sarif-output", str(out)], cwd=tmp_path)
+
+    assert result.returncode == 1
+    assert [v["rule"] for v in json.loads(result.stdout)] == ["PYVIBE-001"]
+    assert "SARIF results written to" in result.stderr
+    assert out.exists()
