@@ -92,7 +92,10 @@ class SubprocessAsyncRule(AsyncBlockingCallVisitor):
     loop for the entire duration of the subprocess.  subprocess.Popen only blocks
     when its handle is later waited on synchronously (``.wait()`` /
     ``.communicate()``) in the same function; a Popen that merely starts a child
-    and returns does not block, so it is not reported.  Under concurrent load a
+    and returns does not block, so it is not reported.  Known false negative: a
+    Popen whose pipe is read synchronously (``p.stdout.read()``) without
+    ``.wait()``/``.communicate()`` also blocks, but is not reported (xfail test
+    ``test_007_popen_blocking_stdout_read_known_false_negative``).  Under concurrent load a
     blocking call serialises execution and eliminates the benefit of async.
 
     Fix: use asyncio.create_subprocess_exec() or

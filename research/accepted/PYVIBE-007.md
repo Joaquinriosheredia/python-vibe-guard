@@ -83,3 +83,16 @@
 ### Recomendación de Evidence Level
 
 **Mantener B. Precisión 30-32% — baja, pero los TPs son genuinamente críticos.** El patrón de FP dominante es `subprocess.run()` en tests para lanzar servidores externos (legítimo). Los 6 TPs son bugs reales graves: ffmpeg bloqueando event loops de servidores web (pmh1314520/WebRPA, Evil0ctal), instalación de plugins en producción. Aplicar `TEST_FILE_DOWNGRADE` (ya activo en PYVIBE-007 según catalog.md) mejoraría la precisión en producción a ~60-70%. Necesita además detectar el patrón executor wrapper para eliminar otro FP.
+
+
+---
+
+## Limitación conocida (2026-10-14)
+
+`subprocess.Popen` solo se reporta cuando su manejador se espera de forma síncrona en la misma
+función (`.wait()` / `.communicate()`). Un `Popen` cuya **tubería se lee de forma bloqueante**
+—por ejemplo `p.stdout.read()` o `p.stdout.readline()` dentro de `async def`, sin `.wait()` ni
+`.communicate()`— también bloquea el event loop mientras el hijo escribe, pero **no se detecta**:
+es un **falso negativo**. Se encontró con un ejemplo sintético, no con un veredicto del corpus.
+Cubierto por un test de regresión marcado `xfail`
+(`tests/test_rules.py::test_007_popen_blocking_stdout_read_known_false_negative`).

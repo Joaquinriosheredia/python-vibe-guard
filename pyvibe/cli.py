@@ -40,6 +40,7 @@ from pyvibe.analyzer import (
     DEFAULT_EXCLUDES,
     ALL_RULE_IDS,
     _is_test_file,
+    _scan_relative,
 )
 from pyvibe.baseline import DEFAULT_BASELINE_PATH
 from pyvibe.config import is_excluded
@@ -197,7 +198,7 @@ def _resolve_file_results(args) -> Tuple[dict, List[Tuple[Path, object, str]]]:
     if target.is_file():
         if target.suffix != ".py":
             return {}, []
-        if skip_test_files and _is_test_file(str(target)):
+        if skip_test_files and _is_test_file(_scan_relative(target, None)):
             return {}, []
         if config and is_excluded(target, config):
             return {}, []
@@ -353,7 +354,9 @@ def _main_review(argv):
             continue
         if config and is_excluded(abs_path, config):
             continue
-        violations = analyze_file(abs_path, line_filter=added_lines, config=config)
+        violations = analyze_file(
+            abs_path, root=repo_root, line_filter=added_lines, config=config
+        )
         if violations:
             file_results[rel_path] = violations
 
@@ -534,7 +537,7 @@ def _main_baseline(argv):
     if target.is_file():
         if target.suffix != ".py":
             file_results = {}
-        elif args.no_test_files and _is_test_file(str(target)):
+        elif args.no_test_files and _is_test_file(_scan_relative(target, None)):
             file_results = {}
         elif config and is_excluded(target, config):
             file_results = {}

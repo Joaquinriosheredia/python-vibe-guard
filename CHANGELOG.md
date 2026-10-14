@@ -12,6 +12,12 @@ All notable changes to python-vibe-guard are recorded here.
   `com/example/` (segment `example`) and `app/my_tests_utils.py` are not downgraded.
   The CLI applies the same rule as the library (previously it passed the short
   per-rule list), so `--downgrade-in-tests` is now the default and kept only for compatibility.
+  Only the **scanned root's own name and the directory segments inside it** count (for a
+  single file, its immediate directory as passed), **never the directories above**: a
+  repository cloned under `.../scripts/my-repo` and scanned by absolute path or as `.` is no
+  longer downgraded as a whole (also for `--no-test-files`), while `pyvibe scripts/` and
+  `pyvibe tests/foo.py` are. The root is the scanned directory, or the git repository for
+  `pyvibe review`.
 - **PYVIBE-017** (silent except): by default now reports only a bare `except:` and an
   `except BaseException` with an empty body (pass/...), and only **in an async function**
   (they swallow CancelledError/KeyboardInterrupt/SystemExit). A plain `except Exception: pass`
@@ -33,4 +39,10 @@ All notable changes to python-vibe-guard are recorded here.
   detected. The rule intentionally allows ordinary synchronous statements outside the try so
   the common guarded pattern is not over-reported. Tracked by an `xfail` regression test
   (`test_013_B2_sync_validation_before_try_known_false_negative`) and in the rule's
+  `pyvibe explain` text.
+- **PYVIBE-007**: a `subprocess.Popen` whose pipe is read synchronously (e.g.
+  `p.stdout.read()` in an `async def`) without `.wait()`/`.communicate()` blocks the event
+  loop but is a **false negative**: only `.wait()`/`.communicate()` count as waiting. Found
+  with a synthetic example (no corpus verdict). Tracked by an `xfail` regression test
+  (`test_007_popen_blocking_stdout_read_known_false_negative`) and in the rule's
   `pyvibe explain` text.
