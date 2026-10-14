@@ -38,6 +38,7 @@ class PyvibeConfig:
     ignore: FrozenSet[str] = frozenset()
     exclude: Tuple[str, ...] = ()
     severity: Dict[str, str] = field(default_factory=dict)  # rule_id -> "CRITICAL"/"WARNING"
+    report_broad_except: bool = False  # PYVIBE-017 opt-in: report `except Exception: pass`
 
 
 def find_config_file(start: Path) -> Optional[Path]:
@@ -82,8 +83,12 @@ def load_config(start: Path) -> Optional[PyvibeConfig]:
 
     _validate_severity(raw_severity, config_path)
     severity = {rule_id: value.upper() for rule_id, value in raw_severity.items()}
+    report_broad_except = bool(tool_section.get("report_broad_except", False))
 
-    return PyvibeConfig(root=config_path.parent, ignore=ignore, exclude=exclude, severity=severity)
+    return PyvibeConfig(
+        root=config_path.parent, ignore=ignore, exclude=exclude, severity=severity,
+        report_broad_except=report_broad_except,
+    )
 
 
 def is_excluded(path: Path, config: PyvibeConfig) -> bool:

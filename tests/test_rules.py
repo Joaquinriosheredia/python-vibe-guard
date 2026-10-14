@@ -1475,7 +1475,8 @@ async def handler():
 
 # ─── PYVIBE-017: silent except ───────────────────────────────────────────────
 
-def test_017_detects_bare_except_pass():
+def test_017_bare_except_in_sync_not_reported():
+    # (d) decision 2026-10-14: bare except is reported only in async context.
     src = """
 def process():
     try:
@@ -1484,12 +1485,10 @@ def process():
         pass
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
-    assert len(v017) == 1
-    assert v017[0].severity == "CRITICAL"
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
 
 
-def test_017_detects_bare_except_ellipsis():
+def test_017_detects_bare_except_ellipsis_async():
     src = """
 async def handler():
     try:
@@ -1503,7 +1502,22 @@ async def handler():
     assert v017[0].severity == "CRITICAL"
 
 
-def test_017_detects_except_exception_pass():
+def test_017_detects_base_exception_empty_async():
+    src = """
+async def handler():
+    try:
+        await do_work()
+    except BaseException:
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+
+
+def test_017_except_exception_pass_not_reported_by_default():
+    # (d): `except Exception: pass` is opt-in; not reported by default.
     src = """
 async def handler():
     try:
@@ -1512,12 +1526,25 @@ async def handler():
         pass
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_except_exception_pass_reported_when_opted_in():
+    src = """
+async def handler():
+    try:
+        await process_order()
+    except Exception:
+        pass
+"""
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/h.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
     assert v017[0].severity == "WARNING"
 
 
-def test_017_detects_except_exception_ellipsis():
+def test_017_except_exception_ellipsis_sync_not_reported():
     src = """
 def sync_worker():
     try:
@@ -1526,9 +1553,7 @@ def sync_worker():
         ...
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
-    assert len(v017) == 1
-    assert v017[0].severity == "WARNING"
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
 
 
 def test_017_no_false_positive_with_logging():
@@ -1584,6 +1609,7 @@ def handler():
 
 def test_017_nosec_b110_suppresses_exception_pass():
     # # nosec B110 on the except line = intentional suppression, must not flag
+    # (checked with the opt-in on, since `except Exception: pass` is opt-in now).
     src = """
 async def shutdown():
     try:
@@ -1591,12 +1617,13 @@ async def shutdown():
     except Exception:  # nosec B110
         pass
 """
-    violations = analyze_source(src)
-    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/s.py", report_broad_except=True)
+    assert not any(v.rule_id == "PYVIBE-017" for v in reported)
 
 
-def test_017_without_nosec_still_flagged():
-    # Regression: identical pattern without # nosec B110 must still be detected
+def test_017_without_nosec_still_flagged_when_opted_in():
+    # Regression: identical pattern without # nosec B110 is detected when opted in.
     src = """
 async def shutdown():
     try:
@@ -1604,16 +1631,15 @@ async def shutdown():
     except Exception:
         pass
 """
-    violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/s.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
     assert v017[0].severity == "WARNING"
 
 
 def test_017_nosec_without_b110_is_not_suppressed():
-    # # nosec alone (no B110 code) does NOT suppress PYVIBE-017.
-    # Rationale: generic # nosec targets Bandit rules; PYVIBE-017 is a separate
-    # detector and requires the specific B110 code for an explicit opt-out.
+    # # nosec alone (no B110 code) does NOT suppress PYVIBE-017 (opt-in on).
     src = """
 async def handler():
     try:
@@ -1621,22 +1647,129 @@ async def handler():
     except Exception:  # nosec
         pass
 """
-    violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/h.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
 
 
 def test_017_nosec_b110_suppresses_bare_except():
-    # # nosec B110 also suppresses bare except (same convention)
+    # # nosec B110 also suppresses bare except (async context; same convention)
     src = """
-def cleanup():
+async def cleanup():
     try:
-        resource.close()
+        await resource.close()
     except:  # nosec B110
         pass
 """
     violations = analyze_source(src)
     assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_base_exception_around_await_is_critical_dl055():
+    # Regression for dev-labels.json DL-055 (ARES execution_admission.py:1117,
+    # _park_uncertain_after_cancellation; TP): `except BaseException: pass`
+    # wraps `await parking`, so a second cancellation of the task during that
+    # await is absorbed.
+    src = """
+import asyncio
+class Admission:
+    async def _park_uncertain_after_cancellation(self, identity):
+        parking = asyncio.create_task(self._park_uncertain(identity))
+        try:
+            await asyncio.wait_for(asyncio.shield(parking), timeout=5.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            parking.cancel()
+            try:
+                await parking
+            except BaseException:
+                pass
+        except Exception:
+            pass
+"""
+    v017 = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+    assert v017[0].line == 12
+    assert v017[0].function_name == "_park_uncertain_after_cancellation"
+
+
+def test_017_base_exception_around_sync_call_not_reported_dl056():
+    # Regression for dev-labels.json DL-056 (dramaclaw ladybug_access.py:236,
+    # _await_query_completion; FP): the try holds only the synchronous
+    # future.result() (no suspension point) and the function re-raises
+    # `cancelled` afterwards.
+    src = """
+import asyncio
+async def _await_query_completion(awaitable):
+    future = asyncio.ensure_future(awaitable)
+    try:
+        return await asyncio.shield(future)
+    except asyncio.CancelledError as cancelled:
+        while not future.done():
+            try:
+                await asyncio.shield(future)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        if future.done() and not future.cancelled():
+            try:
+                future.result()
+            except BaseException:
+                pass
+        raise cancelled
+"""
+    assert not any(v.rule_id == "PYVIBE-017" for v in analyze_source(src))
+
+
+def test_017_bare_except_sync_string_ops_not_reported_dl057():
+    # Regression for dev-labels.json DL-057 (ViNote video_preview_service.py:108,
+    # _format_date; review-set id C243; FP, overstated): synchronous function,
+    # the try holds only string operations.
+    src = """
+class VideoPreviewService:
+    def _format_date(self, date_str):
+        if not date_str:
+            return "unknown"
+        try:
+            if len(date_str) == 8:
+                year = date_str[:4]
+                month = date_str[4:6]
+                day = date_str[6:8]
+                return f"{year}-{month}-{day}"
+        except:
+            pass
+        return date_str
+"""
+    assert not any(v.rule_id == "PYVIBE-017" for v in analyze_source(src))
+
+
+def test_017_async_with_in_try_counts_as_suspension_point():
+    src = """
+async def handler(lock):
+    try:
+        async with lock:
+            do_work()
+    except:
+        pass
+"""
+    v017 = [v for v in analyze_source(src) if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+
+
+def test_017_await_in_nested_def_does_not_count():
+    src = """
+async def handler():
+    try:
+        async def inner():
+            await do_work()
+        register(inner)
+    except BaseException:
+        pass
+"""
+    assert not any(v.rule_id == "PYVIBE-017" for v in analyze_source(src))
 
 
 # ─── PYVIBE-018: while True without await ────────────────────────────────────
