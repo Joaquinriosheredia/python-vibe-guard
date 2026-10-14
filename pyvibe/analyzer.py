@@ -108,6 +108,7 @@ def analyze_source_full(
     *,
     downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
+    report_broad_except: bool = False,
 ) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
     """Parse source and run all rules. Returns (reported, suppressed) where
     suppressed is a list of (Violation, reason) with reason "inline" (a
@@ -127,10 +128,11 @@ def analyze_source_full(
         return [], []
 
     source_lines = source.splitlines()
+    broad_except = report_broad_except or bool(config.report_broad_except if config else False)
     violations = []
     for RuleClass in ALL_RULES:
         if RuleClass is SilentExceptRule:
-            visitor = RuleClass(source_lines)
+            visitor = RuleClass(source_lines, report_broad_except=broad_except)
         elif RuleClass in _NEEDS_SOURCE:
             visitor = RuleClass(source)
         else:

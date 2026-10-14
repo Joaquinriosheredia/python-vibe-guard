@@ -113,6 +113,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--report-broad-except",
+        action="store_true",
+        help=(
+            "PYVIBE-017 opt-in: also report `except Exception` with an empty body "
+            "(pass/...). Off by default; equivalent to report_broad_except = true "
+            "under [tool.pyvibe]."
+        ),
+    )
+    parser.add_argument(
         "--baseline",
         action="store_true",
         help="Only report findings not already present in the baseline (see `pyvibe baseline create`)",
@@ -163,6 +172,15 @@ def _resolve_file_results(args) -> Tuple[dict, List[Tuple[Path, object, str]]]:
         sys.exit(2)
 
     config = _load_config_or_exit(target)
+
+    if getattr(args, "report_broad_except", False):
+        from dataclasses import replace as _replace
+        from pyvibe.config import PyvibeConfig
+        if config is None:
+            config = PyvibeConfig(root=(target if target.is_dir() else target.parent),
+                                  report_broad_except=True)
+        else:
+            config = _replace(config, report_broad_except=True)
 
     exclude = DEFAULT_EXCLUDES | frozenset(args.exclude)
 
@@ -435,6 +453,15 @@ def _main_scan(argv):
         "--downgrade-in-tests",
         action="store_true",
         help="Kept for compatibility; now the default (every rule's CRITICAL -> WARNING in non-production files)",
+    )
+    parser.add_argument(
+        "--report-broad-except",
+        action="store_true",
+        help=(
+            "PYVIBE-017 opt-in: also report `except Exception` with an empty body "
+            "(pass/...). Off by default; equivalent to report_broad_except = true "
+            "under [tool.pyvibe]."
+        ),
     )
     parser.add_argument(
         "--baseline",

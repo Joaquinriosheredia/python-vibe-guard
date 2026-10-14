@@ -1475,7 +1475,8 @@ async def handler():
 
 # ─── PYVIBE-017: silent except ───────────────────────────────────────────────
 
-def test_017_detects_bare_except_pass():
+def test_017_bare_except_in_sync_not_reported():
+    # (d) decision 2026-10-14: bare except is reported only in async context.
     src = """
 def process():
     try:
@@ -1484,12 +1485,10 @@ def process():
         pass
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
-    assert len(v017) == 1
-    assert v017[0].severity == "CRITICAL"
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
 
 
-def test_017_detects_bare_except_ellipsis():
+def test_017_detects_bare_except_ellipsis_async():
     src = """
 async def handler():
     try:
@@ -1503,7 +1502,22 @@ async def handler():
     assert v017[0].severity == "CRITICAL"
 
 
-def test_017_detects_except_exception_pass():
+def test_017_detects_base_exception_empty_async():
+    src = """
+async def handler():
+    try:
+        await do_work()
+    except BaseException:
+        pass
+"""
+    violations = analyze_source(src)
+    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert len(v017) == 1
+    assert v017[0].severity == "CRITICAL"
+
+
+def test_017_except_exception_pass_not_reported_by_default():
+    # (d): `except Exception: pass` is opt-in; not reported by default.
     src = """
 async def handler():
     try:
@@ -1512,12 +1526,25 @@ async def handler():
         pass
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+
+
+def test_017_except_exception_pass_reported_when_opted_in():
+    src = """
+async def handler():
+    try:
+        await process_order()
+    except Exception:
+        pass
+"""
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/h.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
     assert v017[0].severity == "WARNING"
 
 
-def test_017_detects_except_exception_ellipsis():
+def test_017_except_exception_ellipsis_sync_not_reported():
     src = """
 def sync_worker():
     try:
@@ -1526,9 +1553,7 @@ def sync_worker():
         ...
 """
     violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
-    assert len(v017) == 1
-    assert v017[0].severity == "WARNING"
+    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
 
 
 def test_017_no_false_positive_with_logging():
@@ -1584,6 +1609,7 @@ def handler():
 
 def test_017_nosec_b110_suppresses_exception_pass():
     # # nosec B110 on the except line = intentional suppression, must not flag
+    # (checked with the opt-in on, since `except Exception: pass` is opt-in now).
     src = """
 async def shutdown():
     try:
@@ -1591,12 +1617,13 @@ async def shutdown():
     except Exception:  # nosec B110
         pass
 """
-    violations = analyze_source(src)
-    assert not any(v.rule_id == "PYVIBE-017" for v in violations)
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/s.py", report_broad_except=True)
+    assert not any(v.rule_id == "PYVIBE-017" for v in reported)
 
 
-def test_017_without_nosec_still_flagged():
-    # Regression: identical pattern without # nosec B110 must still be detected
+def test_017_without_nosec_still_flagged_when_opted_in():
+    # Regression: identical pattern without # nosec B110 is detected when opted in.
     src = """
 async def shutdown():
     try:
@@ -1604,16 +1631,15 @@ async def shutdown():
     except Exception:
         pass
 """
-    violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/s.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
     assert v017[0].severity == "WARNING"
 
 
 def test_017_nosec_without_b110_is_not_suppressed():
-    # # nosec alone (no B110 code) does NOT suppress PYVIBE-017.
-    # Rationale: generic # nosec targets Bandit rules; PYVIBE-017 is a separate
-    # detector and requires the specific B110 code for an explicit opt-out.
+    # # nosec alone (no B110 code) does NOT suppress PYVIBE-017 (opt-in on).
     src = """
 async def handler():
     try:
@@ -1621,17 +1647,18 @@ async def handler():
     except Exception:  # nosec
         pass
 """
-    violations = analyze_source(src)
-    v017 = [v for v in violations if v.rule_id == "PYVIBE-017"]
+    from pyvibe.analyzer import analyze_source_full
+    reported, _ = analyze_source_full(src, "app/h.py", report_broad_except=True)
+    v017 = [v for v in reported if v.rule_id == "PYVIBE-017"]
     assert len(v017) == 1
 
 
 def test_017_nosec_b110_suppresses_bare_except():
-    # # nosec B110 also suppresses bare except (same convention)
+    # # nosec B110 also suppresses bare except (async context; same convention)
     src = """
-def cleanup():
+async def cleanup():
     try:
-        resource.close()
+        await resource.close()
     except:  # nosec B110
         pass
 """

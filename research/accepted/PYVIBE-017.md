@@ -358,3 +358,18 @@ Confidence:
 - [roguelynn.com — Exception Handling in asyncio (Lynn Root)](https://www.roguelynn.com/words/asyncio-exception-handling/)
 - [jupyter/notebook#1582 — Silent asyncio task exceptions](https://github.com/jupyter/notebook/issues/1582)
 - [python/cpython#97827 — Unhandled exceptions in asyncio (closed not planned)](https://github.com/python/cpython/issues/97827)
+
+---
+
+## Restricción por defecto (2026-10-14)
+
+Por defecto PYVIBE-017 reporta **solo**, y únicamente **en contexto async**:
+- un **`except:` desnudo**, y
+- un **`except BaseException`** cuyo cuerpo es `pass`/`...` (sin re-raise).
+
+Ambos tragan `CancelledError`/`KeyboardInterrupt`/`SystemExit`, rompiendo la cancelación y
+el apagado limpio del event loop. El caso frecuente **`except Exception: pass`** pasa a
+**opt-in** (`report_broad_except = true` en `[tool.pyvibe]`, o `--report-broad-except`): no
+se reporta por defecto. Un `except:` en código **síncrono**, un tipo de excepción concreto,
+un cuerpo no vacío y un handler que re-lanza no se reportan. La supresión `# nosec B110`
+sigue aplicando.
