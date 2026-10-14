@@ -39,3 +39,9 @@ All notable changes to python-vibe-guard are recorded here.
   the common guarded pattern is not over-reported. Tracked by an `xfail` regression test
   (`test_013_B2_sync_validation_before_try_known_false_negative`) and in the rule's
   `pyvibe explain` text.
+- **PYVIBE-007**: a `subprocess.Popen` whose pipe is read synchronously (e.g.
+  `p.stdout.read()` in an `async def`) without `.wait()`/`.communicate()` blocks the event
+  loop but is a **false negative**: only `.wait()`/`.communicate()` count as waiting. Found
+  with a synthetic example (no corpus verdict). Tracked by an `xfail` regression test
+  (`test_007_popen_blocking_stdout_read_known_false_negative`) and in the rule's
+  `pyvibe explain` text.

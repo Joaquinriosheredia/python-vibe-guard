@@ -4,6 +4,7 @@ Each test validates:
   - the anti-pattern IS detected (true positive)
   - the equivalent sync code is NOT detected (no false positive)
 """
+import pytest
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -489,6 +490,24 @@ async def run_both():
     assert len(violations) == 1
     assert violations[0].rule_id == "PYVIBE-007"
     assert violations[0].line == 5  # the 'blocking' Popen, not 'started'
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known false negative (decision 2026-10-14; synthetic case, no corpus "
+    "verdict): a Popen whose pipe is read synchronously (p.stdout.read()) blocks the "
+    "event loop like .communicate(), but PYVIBE-007 only treats .wait()/.communicate() "
+    "as waiting, so it is not reported.",
+)
+def test_007_popen_blocking_stdout_read_known_false_negative():
+    src = """
+import subprocess
+async def handler(cmd):
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    return p.stdout.read()
+"""
+    violations = analyze_source(src)
+    assert [v.rule_id for v in violations] == ["PYVIBE-007"]
 
 
 def test_007_no_false_positive_bare_import():
