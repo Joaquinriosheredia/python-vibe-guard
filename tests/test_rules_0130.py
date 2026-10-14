@@ -248,12 +248,9 @@ async def map_bounded(worker, items):
 ''') == []
 
 
-def test_013_recursion_over_contained_awaitables_not_reported():
-    # Mechanism of C011 reduced to safe calls only: _build_tree awaits gathers of
-    # a contained fetch and of itself (recursion); every sync call is whitelisted
-    # (dict.get / isinstance). The REAL C011 re-fires — see the next test — because
-    # its _build_tree also calls datetime.fromtimestamp()/_truncate_text() outside
-    # any try, which this reduced form omits.
+def test_013_C011_fp_recursive_tree_over_contained_fetch():
+    # C011 (FP): _build_tree awaits gathers of a contained fetch and of itself
+    # (recursion); nothing can raise an ordinary exception.
     assert _013('''
 import asyncio
 
@@ -264,40 +261,16 @@ async def handler(root):
         except Exception:
             return None
     async def _build_tree(item, depth):
-        kids = [c for c in item.get("kids", []) if isinstance(c, int)]
-        raw = await asyncio.gather(*[_fetch(c) for c in kids])
+        raw = await asyncio.gather(*[_fetch(c) for c in item])
         return await asyncio.gather(*[_build_tree(c, depth - 1) for c in raw if c])
     await asyncio.gather(*[_build_tree(c, 2) for c in root])
 ''') == []
 
 
-def test_013_sync_call_outside_try_breaks_containment_reported():
-    # Real C011 shape: a non-whitelisted synchronous call (datetime.fromtimestamp,
-    # a project helper) outside any try can raise and escape → reported.
-    assert len(_013('''
-import asyncio
-from datetime import datetime, timezone
-
-async def handler(root):
-    async def _fetch(iid):
-        try:
-            return await call(iid)
-        except Exception:
-            return None
-    async def _build_tree(item, depth):
-        created = datetime.fromtimestamp(item.get("time"), tz=timezone.utc).isoformat()
-        raw = await asyncio.gather(*[_fetch(c) for c in item.get("kids", [])])
-        return created, await asyncio.gather(*[_build_tree(c, depth - 1) for c in raw if c])
-    await asyncio.gather(*[_build_tree(c, 2) for c in root])
-''')) >= 1
-
-
-def test_013_C203_sync_get_settings_outside_try_reported():
-    # C203: the only awaited I/O (to_thread) is inside a swallowing try, but the
-    # synchronous get_settings() runs outside it and can raise → reported. (This
-    # re-fires a finding Joaquín's blind review judged FP on the premise that
-    # get_settings() does not fail in normal conditions; see PR discussion.)
-    assert len(_013('''
+def test_013_C203_fp_sync_stmt_outside_try_and_to_thread_guarded():
+    # C203 (FP): a synchronous get_settings() outside the try; the only awaited
+    # I/O (to_thread) is inside a try that swallows broadly. Two *a, *b lists.
+    assert _013('''
 import asyncio
 
 async def _retrieve(call):
@@ -311,7 +284,7 @@ async def route_parallel(calls):
     knowledge = [_retrieve(c) for c in calls]
     failures = [_retrieve(c) for c in calls]
     await asyncio.gather(*knowledge, *failures)
-''')) == 1
+''') == []
 
 
 def test_013_C220_fp_wait_for_guarded_by_timeout_and_broad():
@@ -320,8 +293,8 @@ def test_013_C220_fp_wait_for_guarded_by_timeout_and_broad():
     assert _013('''
 import asyncio
 
-async def _probe(settings, timeout):
-    name = str(getattr(settings, "EMBEDDING_PROVIDER", "") or "").strip().lower()
+async def _probe(timeout):
+    name = cfg()
     try:
         return await asyncio.wait_for(asyncio.to_thread(work), timeout=timeout)
     except asyncio.TimeoutError:
@@ -329,8 +302,8 @@ async def _probe(settings, timeout):
     except Exception:
         return {"status": "failed"}
 
-async def warmup(s, t):
-    await asyncio.gather(_probe(s, t), _probe(s, t))
+async def warmup(t):
+    await asyncio.gather(_probe(t), _probe(t))
 ''') == []
 
 
@@ -389,27 +362,6 @@ async def stream(qs):
 ''')) == 1
 
 
-def test_013_B2_sync_validation_raises_before_try_reported():
-    # B2 / #3 (TP): scan_host runs a synchronous scope-guard validation that
-    # raises for out-of-scope hosts BEFORE the try; the exception escapes the task
-    # and gather propagates it while the other scans keep running → reported.
-    assert len(_013('''
-import asyncio
-
-async def scan_hosts(hosts, scope_guard):
-    async def scan_one(host):
-        return await scan_host(host, scope_guard)
-    async def scan_host(host, scope_guard):
-        if scope_guard is not None:
-            scope_guard.assert_in_scope(host, action="scan")
-        try:
-            return await connect(host)
-        except Exception:
-            return None
-    await asyncio.gather(*(scan_one(h) for h in hosts))
-''')) == 1
-
-
 def test_013_C231_tp_callee_awaits_db_outside_try():
     # C231 (TP): rank awaits a fallback DB call outside the try.
     assert len(_013('''
@@ -425,3 +377,31 @@ async def rank(db, company):
 async def page(db, companies):
     await asyncio.gather(*(rank(db, c) for c in companies))
 ''')) == 1
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known false negative (dev-labels DL-046, ARES scan_hosts, #3): a "
+    "synchronous validation that raises BEFORE the try (e.g. scope_guard."
+    "assert_in_scope) escapes the task, but PYVIBE-013 requires a concrete I/O "
+    "failure escaping the awaited call, so it is not detected. Decision 2026-10-14.",
+)
+def test_013_B2_sync_validation_before_try_known_false_negative():
+    # Pattern of #3 (ARES scan_hosts -> scan_one -> scan_host): scan_host runs a
+    # synchronous scope-guard validation that raises for out-of-scope hosts BEFORE
+    # the try; gather would propagate it. The lax rule does NOT flag this (xfail).
+    assert len(_013('''
+import asyncio
+
+async def scan_hosts(hosts, scope_guard):
+    async def scan_one(host):
+        return await scan_host(host, scope_guard)
+    async def scan_host(host, scope_guard):
+        if scope_guard is not None:
+            scope_guard.assert_in_scope(host, action="scan")
+        try:
+            return await connect(host)
+        except Exception:
+            return None
+    await asyncio.gather(*(scan_one(h) for h in hosts))
+''')) >= 1

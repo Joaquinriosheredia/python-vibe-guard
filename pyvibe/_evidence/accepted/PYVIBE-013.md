@@ -360,3 +360,15 @@ Confidence:
 - [Yeray Diaz — Asyncio Coroutine Patterns: Errors and Cancellation (Medium)](https://yeraydiazdiaz.medium.com/asyncio-coroutine-patterns-errors-and-cancellation-3bb422e961ff)
 - [SuperFastPython — Asyncio gather() Exception in Task Does Not Cancel](https://superfastpython.com/asyncio-gather-exception-not-cancel/)
 - [tqdm/tqdm#1286 — Add return_exceptions to asyncio.gather wrapper](https://github.com/tqdm/tqdm/issues/1286)
+
+---
+
+## Limitación conocida (2026-10-14)
+
+La regla apunta a un fallo **concreto de E/S** (red, API, base de datos) que escapa del
+awaitable y se propaga por `gather`. Una **sentencia síncrona fuera del `try`** que lanza
+—por ejemplo una validación como `scope_guard.assert_in_scope(...)` ejecutada antes del
+`try`— es un **falso negativo**: no se detecta. Se acepta a cambio de no sobre-reportar el
+patrón habitual (await guardado por un `try/except` que devuelve un valor, con código
+síncrono trivial alrededor). Cubierto por un test de regresión marcado `xfail`
+(`tests/test_rules_0130.py::test_013_B2_sync_validation_before_try_known_false_negative`).

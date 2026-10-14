@@ -10,44 +10,6 @@ _BROAD_EXCEPTIONS = {"Exception", "BaseException"}
 # leak of an ordinary exception, so it does not break containment.
 _CANCELLATION = {"CancelledError", "KeyboardInterrupt", "SystemExit"}
 
-# A synchronous call on the task's path, outside any swallowing try, can itself
-# raise and escape — so it breaks containment. The only exceptions are this short
-# whitelist of calls that do not raise for in-range inputs in normal use. Each
-# entry is justified; project/HTTP/DB/validation calls are deliberately absent, so
-# a synchronous validation that raises before the try (e.g. assert_in_scope) keeps
-# the finding.
-# Builtins that do not raise for ordinary inputs:
-_SAFE_CALL_NAMES = {
-    "isinstance", "issubclass",   # type checks, never raise for normal args
-    "len", "bool", "str", "repr", "ascii",  # total on normal objects
-    "hasattr",                    # returns False instead of raising
-    "id", "type", "callable",     # introspection, never raise
-    "list", "dict", "tuple", "set", "frozenset",  # constructors over iterables
-    "enumerate", "range", "sorted", "reversed", "zip",  # iteration helpers
-    "any", "all",                 # boolean folds
-}
-# Methods that do not raise on their normal receiver:
-_SAFE_CALL_METHODS = {
-    "get", "keys", "values", "items", "copy", "setdefault",  # dict reads/merges
-    "append", "add", "extend", "update",                      # collection growth
-    "strip", "lstrip", "rstrip", "lower", "upper", "title",   # str transforms
-    "split", "rsplit", "splitlines", "join",                  # str split/join
-    "startswith", "endswith", "format",                       # str predicates/format
-    "isoformat",                                              # datetime -> str
-    "debug", "info", "warning", "error", "exception", "critical", "log",  # logging
-}
-
-
-def _call_is_safe(call: ast.Call) -> bool:
-    f = call.func
-    if isinstance(f, ast.Name):
-        if f.id == "getattr":
-            return len(call.args) >= 3  # getattr with a default never raises
-        return f.id in _SAFE_CALL_NAMES
-    if isinstance(f, ast.Attribute):
-        return f.attr in _SAFE_CALL_METHODS
-    return False
-
 
 class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     """
@@ -70,17 +32,21 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     ``asyncio.ensure_future`` / ``create_task`` of a contained awaitable;
     ``asyncio.to_thread`` of a plain def that contains its exceptions; a call to
     another contained function); and the function raises no ordinary exception
-    outside a cancellation handler. A *synchronous* call outside a swallowing try
-    (on the task's path) can itself raise and escape, so it breaks containment
-    unless it is on a short whitelist of calls that do not raise in normal use
-    (safe builtins, str/dict/collection/logging methods, ``getattr`` with a
-    default); a validation that raises before the try therefore keeps the finding.
-    Resolution follows nested
+    outside a cancellation handler. Synchronous statements outside the try are
+    allowed (only the awaited I/O must be guarded). Resolution follows nested
     defs, ``self.f`` / ``cls.f`` methods and module functions; recursion is
     assumed contained. Awaitable forms understood: ``f(...)``, ``*[...]``,
     ``*(...)``, ``*a, *b``, a local name bound once to a list literal (+append)
     or to a plain comprehension. Anything not resolved or not understood is
     reported: in doubt, the finding stays.
+
+    Known limitation (decision 2026-10-14): the rule targets a concrete I/O
+    failure (network, API, DB) that escapes the awaited call and propagates
+    through gather. A *synchronous* statement outside the try that raises — for
+    example a validation such as ``scope_guard.assert_in_scope(...)`` run before
+    the try — is a false negative: it is not detected, because allowing ordinary
+    synchronous statements outside the try is what keeps the common guarded
+    pattern from being over-reported. Covered by an xfail regression test.
 
     Fix: add return_exceptions=True and inspect the result list, or use
     asyncio.TaskGroup (Python 3.11+) for explicit structured concurrency.
@@ -261,7 +227,7 @@ class _Containment:
     def _analyze(self, func: FuncDef) -> bool:
         ok = [True]
 
-        def walk(node: ast.AST, protect: int, in_cancel: bool, in_handler: bool):
+        def walk(node: ast.AST, protect: int, in_cancel: bool):
             if not ok[0]:
                 return
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
@@ -273,17 +239,6 @@ class _Containment:
             if isinstance(node, ast.Await):
                 if protect == 0 and not self.awaitable_contained(node.value, func):
                     ok[0] = False
-                return
-            if isinstance(node, ast.Call):
-                # A synchronous call on the task's *normal* path, outside a
-                # swallowing try, can raise and escape (an awaited call is handled
-                # above). Calls inside an except handler run only after an
-                # exception was already caught, so they are not on that path.
-                if protect == 0 and not in_handler and not _call_is_safe(node):
-                    ok[0] = False
-                    return
-                for child in ast.iter_child_nodes(node):
-                    walk(child, protect, in_cancel, in_handler)
                 return
             if isinstance(node, ast.Try):
                 # A non-trivial `finally` runs on every path and can raise and
@@ -297,19 +252,21 @@ class _Containment:
                     return
                 swallow = _try_is_swallowing(node)
                 for s in node.body:
-                    walk(s, protect + (1 if swallow else 0), in_cancel, in_handler)
+                    walk(s, protect + (1 if swallow else 0), in_cancel)
                 for h in node.handlers:
                     cancel = _handler_is_cancellation_only(h)
                     for s in h.body:
-                        walk(s, protect, cancel, True)
+                        walk(s, protect, cancel)
                 for s in node.orelse:
-                    walk(s, protect, in_cancel, in_handler)
+                    walk(s, protect, in_cancel)
+                for s in node.finalbody:
+                    walk(s, protect, in_cancel)
                 return
             for child in ast.iter_child_nodes(node):
-                walk(child, protect, in_cancel, in_handler)
+                walk(child, protect, in_cancel)
 
         for stmt in func.body:
-            walk(stmt, 0, False, False)
+            walk(stmt, 0, False)
         return ok[0]
 
     # -- local name bound to a list literal (+ append) ----------------------
