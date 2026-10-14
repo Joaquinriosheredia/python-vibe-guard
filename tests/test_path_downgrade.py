@@ -178,3 +178,42 @@ def test_review_uses_repo_root(tmp_path):
     r = subprocess.run([sys.executable, "-m", "pyvibe", "review", "--base", "HEAD", "--json"],
                        cwd=repo, capture_output=True, text=True, env=env)
     assert [(x["rule"], x["severity"]) for x in json.loads(r.stdout)] == [("PYVIBE-004", "CRITICAL")]
+
+
+# ── the scanned root's own name counts, never the directories above ──────────
+# Decision 2026-10-14 (PR #13): the name of the scanned root and, for a single
+# file, of its immediate directory as passed, count; directories above never do.
+
+
+def test_case_scan_scripts_dir_is_downgraded(tmp_path):
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "gate.py").write_text(LOCK)
+    out = _cli_json(["scripts/"], cwd=tmp_path)
+    assert [(x["rule"], x["severity"]) for x in out] == [("PYVIBE-004", "WARNING")]
+    lib = analyze_directory(tmp_path / "scripts")
+    assert [v.severity for vs in lib.values() for v in vs] == ["WARNING"]
+
+
+def test_case_single_file_in_tests_dir_is_downgraded(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "foo.py").write_text(LOCK)  # not a test_*.py name
+    out = _cli_json(["tests/foo.py"], cwd=tmp_path)
+    assert [(x["rule"], x["severity"]) for x in out] == [("PYVIBE-004", "WARNING")]
+
+
+def test_case_repo_under_scripts_absolute_path_not_downgraded(tmp_path):
+    repo = tmp_path / "scripts" / "mi-repo"
+    (repo / "app").mkdir(parents=True)
+    (repo / "app" / "lock.py").write_text(LOCK)
+    out = _cli_json([str(repo)], cwd=tmp_path)
+    assert [(x["rule"], x["severity"]) for x in out] == [("PYVIBE-004", "CRITICAL")]
+    lib = analyze_directory(repo)
+    assert [v.severity for vs in lib.values() for v in vs] == ["CRITICAL"]
+
+
+def test_case_repo_under_scripts_dot_not_downgraded(tmp_path):
+    repo = tmp_path / "scripts" / "mi-repo"
+    (repo / "app").mkdir(parents=True)
+    (repo / "app" / "lock.py").write_text(LOCK)
+    out = _cli_json(["."], cwd=repo)
+    assert [(x["rule"], x["severity"]) for x in out] == [("PYVIBE-004", "CRITICAL")]

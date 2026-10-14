@@ -104,18 +104,22 @@ def _is_test_file(filepath: str) -> bool:
 
 
 def _scan_relative(path: Path, root: Optional[Path]) -> str:
-    """The path of `path` inside the scan root, for the path-based downgrade.
+    """The path that drives the path-based downgrade (decision 2026-10-14).
 
-    Only directory segments INSIDE the scanned root count: a repository cloned
-    under `.../scripts/x` or `.../tests/x` is not a non-production directory.
-    With no root (a single file), the file's own directory is the root, so only
-    the filename counts. Absolute and relative paths give the same result.
+    Counted: the name of the scanned root itself plus the directory segments
+    inside it; for a single file (no root), the name of its immediate directory
+    as the user passed it. Never the directories above: a repository cloned
+    under `.../scripts/my-repo` and scanned by absolute path or as `.` is not
+    downgraded, while `pyvibe scripts/` and `pyvibe tests/foo.py` are.
     """
-    base = root if root is not None else path.parent
+    if root is None:
+        return str(Path(path.parent.name) / path.name)
+    base = Path(os.path.abspath(root))
     try:
-        return str(Path(os.path.abspath(path)).relative_to(os.path.abspath(base)))
+        inside = Path(os.path.abspath(path)).relative_to(base)
     except ValueError:
         return path.name
+    return str(Path(base.name) / inside)
 
 
 def analyze_source_full(

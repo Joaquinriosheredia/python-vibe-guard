@@ -12,11 +12,12 @@ All notable changes to python-vibe-guard are recorded here.
   `com/example/` (segment `example`) and `app/my_tests_utils.py` are not downgraded.
   The CLI applies the same rule as the library (previously it passed the short
   per-rule list), so `--downgrade-in-tests` is now the default and kept only for compatibility.
-  Only directory segments **inside the scanned root** count: a repository cloned under
-  `.../scripts/x` or `.../tests/x` is no longer downgraded as a whole, with an absolute or a
-  relative path (also for `--no-test-files`). The root is the scanned directory, the git
-  repository for `pyvibe review`, and the file's own directory for a single-file scan, where
-  only the filename counts.
+  Only the **scanned root's own name and the directory segments inside it** count (for a
+  single file, its immediate directory as passed), **never the directories above**: a
+  repository cloned under `.../scripts/my-repo` and scanned by absolute path or as `.` is no
+  longer downgraded as a whole (also for `--no-test-files`), while `pyvibe scripts/` and
+  `pyvibe tests/foo.py` are. The root is the scanned directory, or the git repository for
+  `pyvibe review`.
 - **PYVIBE-017** (silent except): by default now reports only a bare `except:` and an
   `except BaseException` with an empty body (pass/...), and only **in an async function**
   (they swallow CancelledError/KeyboardInterrupt/SystemExit). A plain `except Exception: pass`
