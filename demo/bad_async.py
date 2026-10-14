@@ -94,7 +94,7 @@ async def notify_user(user_id: int):
     asyncio.create_task(send_email(user_id))  # orphaned: Task ref lost immediately
 
 
-# PYVIBE-013 — asyncio.gather() without return_exceptions=True → first exception leaks tasks
+# PYVIBE-013 — asyncio.gather() without return_exceptions=True → first exception re-raised, the rest run unobserved
 async def fetch_all(urls: list):
     results = await asyncio.gather(*(fetch(u) for u in urls))  # missing return_exceptions=True
     return results

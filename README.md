@@ -43,7 +43,7 @@ Incorrect use of asyncio primitives that raise `RuntimeError` at runtime or sile
 |------|---------|------|----------------|
 | PYVIBE-003 | `asyncio.run()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
 | PYVIBE-012 | `asyncio.create_task()` with discarded return value | `async def` | Task GC'd mid-execution; exceptions silently swallowed |
-| PYVIBE-013 | `asyncio.gather()` without `return_exceptions=True` | `async def` | First exception leaks remaining tasks; no per-task error handling |
+| PYVIBE-013 | `asyncio.gather()` without `return_exceptions=True` | `async def` | The first exception is re-raised; the other awaitables keep running with nobody observing their results or later exceptions |
 | PYVIBE-014 | `asyncio.ensure_future()` with discarded return value | `async def` | Same GC hazard as PYVIBE-012; pre-3.7 API still common in older codebases |
 | PYVIBE-015 | `loop.run_until_complete()` inside `async def` | `async def` | `RuntimeError: This event loop is already running` |
 
@@ -65,6 +65,8 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 - PYVIBE-005: `CRITICAL` — checks per-task decorator arguments only. **If your project sets a global `task_time_limit` via `app.conf.task_time_limit`, `app.conf.update(...)`, or in `celeryconfig.py` / `settings.py`, tasks already covered by that global limit will still be flagged.** Add per-task limits (self-documenting, immune to config drift) or suppress with `# pyvibe: ignore PYVIBE-005` on the task's `def` line.
 - PYVIBE-009: `CRITICAL` in production files; automatically downgraded to `WARNING` in test files (`test_*.py`, `*_test.py`, `tests/`). **Context matters:** `open()` in a hot-path request handler blocks all concurrent coroutines (CRITICAL); `open()` in a startup/lifespan function runs before requests are served and has zero practical impact. The rule cannot distinguish these contexts via AST — if you use `open()` in an `async def` lifespan or one-time initializer, the idiomatic fix is to use plain `def` instead (FastAPI's own docs do this), which avoids the flag entirely.
 - PYVIBE-017: bare `except` → `CRITICAL` (catches `KeyboardInterrupt`/`SystemExit`); `except Exception` with empty body → `WARNING`. Specific exceptions (`except ValueError: pass`) are not flagged.
+- PYVIBE-013 (0.13.0): not reported when the file shows that no gathered awaitable can raise an ordinary exception — each resolves, in the same module, to a function whose whole body (at most a docstring before it) is one `try` with a handler for `Exception`/`BaseException`/everything, no `else`, no `finally` and no `raise` in a handler (or to `asyncio.sleep()`). Parameters, attributes, imported or decorated functions and anything not understood are still reported.
+- PYVIBE-009 (0.13.0): `WARNING` instead of `CRITICAL` when the file's I/O is delegated to a thread — `with open(...) as f:` whose handle is only passed, uncalled, to `asyncio.to_thread()` / `run_in_executor()` (`await asyncio.to_thread(f.read, n)`): only `open()`/close run on the loop.
 - PYVIBE-013 in test files: automatically downgraded to `WARNING` in files matching `test_*.py`, `*_test.py`, or paths under `tests/` — exceptions should propagate for assertions in test code.
 - PYVIBE-019: `WARNING` — flags `except` that ends with `continue` or is solely `pass` with no sleep/backoff call. Suppressed when an escalation pattern (`if … : raise/break`) is present.
 - PYVIBE-020: `WARNING` — fires in any function context (sync and async). Suppressed when the `put_nowait()` is inside a `try` whose handlers include `asyncio.QueueFull`, `QueueFull`, bare `except`, or `Exception`.
@@ -434,7 +436,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.12.4
+    rev: v0.13.0
     hooks:
       - id: python-vibe-guard
 ```
@@ -477,7 +479,7 @@ python -m pytest tests/ -v
 python tests/test_rules.py
 ```
 
-341 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
+385 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
 
 ---
 
