@@ -1,13 +1,13 @@
 """
-demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-019).
+demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-020).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 19 findings (17 CRITICAL + 2 WARNING for PYVIBE-017 except Exception
-and PYVIBE-019 retry without backoff).
+Expected: 20 findings (18 CRITICAL + 2 WARNING for PYVIBE-019 retry without
+backoff and PYVIBE-020 put_nowait without handler).
 
 sync_function() at the bottom uses the same async-specific patterns in sync
 context and produces ZERO findings for those rules.
-Note: PYVIBE-017 fires in any context — sync_function() intentionally avoids
-empty except blocks to keep the 0-finding guarantee for async-specific rules.
+Note: PYVIBE-017 is async-only too (an empty bare except / except BaseException
+around an await); sync_function() avoids empty except blocks anyway.
 """
 import asyncio
 import time
@@ -117,12 +117,13 @@ async def fetch_sync_client(url: str):
     return client.get(url).json()
 
 
-# PYVIBE-017 — except Exception with empty body → silences errors (WARNING)
+# PYVIBE-017 — except BaseException with empty body around an await → swallows
+# CancelledError/KeyboardInterrupt/SystemExit (CRITICAL)
 async def process_order_silently():
     try:
         await do_work()
-    except Exception:
-        pass  # all errors silently swallowed — bugs become invisible
+    except BaseException:
+        pass  # cancellation and shutdown silently swallowed
 
 
 # PYVIBE-018 — while True without await inside async def → CPU 100%, event loop blocked

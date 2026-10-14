@@ -56,7 +56,7 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 | PYVIBE-004 | `threading.Lock/RLock/…` inside `async def` | `async def` | Blocks event loop under contention |
 | PYVIBE-005 | `@app.task` / `@shared_task` without `soft_time_limit` or `time_limit` | decorator | Worker hangs forever if external call never returns |
 | PYVIBE-006 | `ContextVar.set()` inside `async def` without `try/finally reset()` | `async def` | Context leaks into sibling async tasks |
-| PYVIBE-017 | `except Exception: pass` / bare `except: pass` (empty body) | any | Swallows all errors silently; bare except also catches `KeyboardInterrupt`/`SystemExit` |
+| PYVIBE-017 | bare `except: pass` / `except BaseException: pass` around an `await` (empty body) | async | Swallows `CancelledError`/`KeyboardInterrupt`/`SystemExit`, breaking cancellation and clean shutdown. `except Exception: pass` is opt-in (`--report-broad-except`) |
 | PYVIBE-018 | `while True:` inside `async def` with no `await` in body | `async def` | Event loop blocked indefinitely; CPU hits 100% |
 | PYVIBE-019 | retry `for`/`while` loop in `async def` with no backoff in `except` | `async def` | Tight retry loop on failure: thousands of failed requests/sec, cascading failures |
 | PYVIBE-020 | `put_nowait()` without `asyncio.QueueFull` handler | any | `QueueFull` propagates unhandled; item is silently lost on bounded queues |
@@ -64,7 +64,7 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 **Severity notes:**
 - PYVIBE-005: `CRITICAL` — checks per-task decorator arguments only. **If your project sets a global `task_time_limit` via `app.conf.task_time_limit`, `app.conf.update(...)`, or in `celeryconfig.py` / `settings.py`, tasks already covered by that global limit will still be flagged.** Add per-task limits (self-documenting, immune to config drift) or suppress with `# pyvibe: ignore PYVIBE-005` on the task's `def` line.
 - PYVIBE-009: `CRITICAL` in production files; automatically downgraded to `WARNING` in test files (`test_*.py`, `*_test.py`, `tests/`). **Context matters:** `open()` in a hot-path request handler blocks all concurrent coroutines (CRITICAL); `open()` in a startup/lifespan function runs before requests are served and has zero practical impact. The rule cannot distinguish these contexts via AST — if you use `open()` in an `async def` lifespan or one-time initializer, the idiomatic fix is to use plain `def` instead (FastAPI's own docs do this), which avoids the flag entirely.
-- PYVIBE-017: bare `except` → `CRITICAL` (catches `KeyboardInterrupt`/`SystemExit`); `except Exception` with empty body → `WARNING`. Specific exceptions (`except ValueError: pass`) are not flagged.
+- PYVIBE-017: bare `except` / `except BaseException` with an empty body → `CRITICAL`, only in an async function and only when the `try` body contains an `await` (or `async for`/`async with`), where a cancellation can arrive. `except Exception` with an empty body → `WARNING`, only with `report_broad_except = true` / `--report-broad-except`. Specific exceptions (`except ValueError: pass`) are not flagged.
 - PYVIBE-013 (0.13.0): not reported when the file shows that no gathered awaitable can raise an ordinary exception — each resolves, in the same module, to a function whose whole body (at most a docstring before it) is one `try` with a handler for `Exception`/`BaseException`/everything, no `else`, no `finally` and no `raise` in a handler (or to `asyncio.sleep()`). Parameters, attributes, imported or decorated functions and anything not understood are still reported.
 - PYVIBE-009 (0.13.0): `WARNING` instead of `CRITICAL` when the file's I/O is delegated to a thread — `with open(...) as f:` whose handle is only passed, uncalled, to `asyncio.to_thread()` / `run_in_executor()` (`await asyncio.to_thread(f.read, n)`): only `open()`/close run on the loop.
 - PYVIBE-013 in test files: automatically downgraded to `WARNING` in files matching `test_*.py`, `*_test.py`, or paths under `tests/` — exceptions should propagate for assertions in test code.
@@ -455,7 +455,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 
 - **Pure AST, zero runtime dependencies** — uses only Python's built-in `ast` module
 - **Each rule is an independent `ast.NodeVisitor`** — easy to add, disable, or extend
-- **Gate on `async def`** — most rules check `_current_async_func` before firing; PYVIBE-017 (silent except) fires in any function context
+- **Gate on `async def`** — most rules check `_current_async_func` before firing; PYVIBE-017 (silent except) fires only in async functions, around an `await`
 - **No import resolution** — works on any Python file without installing its dependencies
 - **Test-aware severity** — PYVIBE-013 is automatically downgraded to WARNING in test files
 
@@ -467,7 +467,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 python -m pyvibe demo/bad_async.py
 ```
 
-Expected: 20 findings (17 CRITICAL + 3 WARNING for PYVIBE-017 `except Exception`, PYVIBE-019 retry without backoff, and PYVIBE-020 `put_nowait` without handler), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
+Expected: 20 findings (18 CRITICAL + 2 WARNING for PYVIBE-019 retry without backoff and PYVIBE-020 `put_nowait` without handler), one per rule. `demo/bad_async.py` also contains a sync function that mirrors the async-specific patterns — those produce zero findings.
 
 ---
 
