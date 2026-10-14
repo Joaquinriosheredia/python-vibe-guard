@@ -80,15 +80,25 @@ TEST_FILE_DOWNGRADE: FrozenSet[str] = frozenset({
 })
 
 
+# Non-production directory segments: a CRITICAL finding whose path has any of
+# these as a FULL directory segment is downgraded to WARNING (never silenced).
+# Full-segment match only, so `com/example/` (segment "example", not "examples")
+# and `app/my_tests_utils.py` (filename contains "tests", no such segment) are
+# NOT downgraded. (FASE1-DISENO.md point 1 / decision 2026-10-14.)
+_NONPROD_SEGMENTS: FrozenSet[str] = frozenset({
+    "tests", "test", "scripts", "wip", "spike", "examples",
+})
+
+
 def _is_test_file(filepath: str) -> bool:
     p = Path(filepath)
     name = p.name
-    parts = p.parts
+    dir_segments = p.parts[:-1]  # directory segments only, never the filename
     return (
         name.startswith("test_")
         or name.endswith("_test.py")
-        or "tests" in parts
-        or "test" in parts
+        or name == "conftest.py"
+        or any(seg in _NONPROD_SEGMENTS for seg in dir_segments)
     )
 
 
@@ -96,7 +106,7 @@ def analyze_source_full(
     source: str,
     filepath: str = "<string>",
     *,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
     """Parse source and run all rules. Returns (reported, suppressed) where
@@ -130,7 +140,8 @@ def analyze_source_full(
 
     if downgrade_in_tests and _is_test_file(filepath):
         for v in violations:
-            if v.rule_id in downgrade_in_tests:
+            # Rebaja, never silence: only CRITICAL is lowered to WARNING.
+            if v.rule_id in downgrade_in_tests and v.severity == "CRITICAL":
                 v.severity = "WARNING"
 
     if config and config.severity:
@@ -158,7 +169,7 @@ def analyze_source(
     source: str,
     filepath: str = "<string>",
     *,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> List[Violation]:
     """Parse source and run all rules. Returns the reported (non-suppressed)
@@ -173,7 +184,7 @@ def analyze_source(
 def analyze_file_full(
     path: Path,
     *,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
     source = path.read_text(encoding="utf-8", errors="ignore")
@@ -185,7 +196,7 @@ def analyze_file_full(
 def analyze_file(
     path: Path,
     *,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     line_filter: Optional[FrozenSet[int]] = None,
     config: Optional[PyvibeConfig] = None,
 ) -> List[Violation]:
@@ -212,7 +223,7 @@ def analyze_directory(
     exclude: frozenset = DEFAULT_EXCLUDES,
     *,
     skip_test_files: bool = False,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> dict:
     """Walk directory and analyze all .py files. Returns {path: [violations]}.
@@ -240,7 +251,7 @@ def analyze_directory_full(
     exclude: frozenset = DEFAULT_EXCLUDES,
     *,
     skip_test_files: bool = False,
-    downgrade_in_tests: FrozenSet[str] = TEST_FILE_DOWNGRADE,
+    downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> Tuple[dict, List[Tuple[Path, Violation, str]]]:
     """Like analyze_directory(), but also returns the suppressed findings

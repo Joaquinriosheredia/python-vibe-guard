@@ -5,6 +5,11 @@ All notable changes to python-vibe-guard are recorded here.
 ## Unreleased
 
 ### Changed
+- **Path-based severity (all rules)**: a CRITICAL finding whose file path has a
+  non-production directory segment — `tests/`, `test/`, `scripts/`, `wip/`, `spike/`,
+  `examples/` (full-segment match) — or a test filename (`test_*.py`, `*_test.py`,
+  `conftest.py`) is downgraded to WARNING, never silenced. Full-segment match only, so
+  `com/example/` (segment `example`) and `app/my_tests_utils.py` are not downgraded.
 - **PYVIBE-013** (`asyncio.gather` without `return_exceptions=True`): added a containment
   analysis so a gather is not reported when every gathered awaitable resolves to a function
   that contains its exceptions (the awaited I/O is guarded by a `try`/`except` that returns,
