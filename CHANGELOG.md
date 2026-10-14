@@ -17,6 +17,10 @@ All notable changes to python-vibe-guard are recorded here.
   (they swallow CancelledError/KeyboardInterrupt/SystemExit). A plain `except Exception: pass`
   is now **opt-in** (`report_broad_except = true` under `[tool.pyvibe]`, or
   `--report-broad-except`); a bare except in synchronous code is no longer reported.
+  Within an async function, the CRITICAL is raised only when the `try` body contains a
+  suspension point (`await`, `async for`, `async with`) where a cancellation can be delivered;
+  a try with only synchronous work (e.g. `future.result()`) is not reported (dev-labels
+  DL-055..DL-057).
 - **PYVIBE-013** (`asyncio.gather` without `return_exceptions=True`): added a containment
   analysis so a gather is not reported when every gathered awaitable resolves to a function
   that contains its exceptions (the awaited I/O is guarded by a `try`/`except` that returns,

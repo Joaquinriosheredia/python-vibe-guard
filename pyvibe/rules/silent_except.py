@@ -30,6 +30,27 @@ def _handler_names(exc_type) -> List[str]:
     return [t.id for t in types if isinstance(t, ast.Name)]
 
 
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+_SUSPENSION = (ast.Await, ast.AsyncFor, ast.AsyncWith)
+
+
+def _has_suspension_point(stmts: list) -> bool:
+    """True if `stmts` contain an await (or async for/with) in the same scope.
+
+    Nested functions, lambdas and classes are not entered: an await there does
+    not suspend the enclosing coroutine.
+    """
+    stack = list(stmts)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _SUSPENSION):
+            return True
+        if isinstance(node, _SCOPES):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+    return False
+
+
 class SilentExceptRule(ast.NodeVisitor):
     """
     PYVIBE-017 — a handler that silently swallows system-exiting exceptions
@@ -38,7 +59,11 @@ class SilentExceptRule(ast.NodeVisitor):
     function: a **bare `except:`** and an **`except BaseException`** whose body is
     just pass/... (and does not re-raise). Both swallow CancelledError /
     KeyboardInterrupt / SystemExit, breaking cancellation and clean shutdown of an
-    event loop. A plain **`except Exception: pass`** is extremely common and is
+    event loop. Only when the **`try` body contains a suspension point** (an
+    `await`, `async for` or `async with` in that coroutine) can a cancellation
+    be delivered inside it; without one (e.g. only `future.result()` or string
+    operations) these handlers are not reported (decision 2026-10-14, dev-labels
+    DL-055..DL-057). A plain **`except Exception: pass`** is extremely common and is
     *opt-in* (set `report_broad_except = true` under `[tool.pyvibe]`, or pass
     `--report-broad-except`); it is not reported by default. A bare except in
     synchronous code, a specific exception type, a non-empty handler, and a
@@ -60,6 +85,7 @@ class SilentExceptRule(ast.NodeVisitor):
         self._source_lines: List[str] = source_lines or []
         self._report_broad_except = report_broad_except
         self._in_async = False
+        self._handler_suspends: dict = {}  # id(handler) -> try body has a suspension point
 
     def _is_suppressed(self, lineno: int) -> bool:
         """Return True if the given 1-based line carries # nosec B110."""
@@ -88,6 +114,14 @@ class SilentExceptRule(ast.NodeVisitor):
         self.generic_visit(node)
         self._in_async = prev_async
 
+    def visit_Try(self, node: ast.Try):
+        suspends = _has_suspension_point(node.body)
+        for handler in node.handlers:
+            self._handler_suspends[id(handler)] = suspends
+        self.generic_visit(node)
+
+    visit_TryStar = visit_Try  # Python 3.11+ (except*)
+
     def visit_ExceptHandler(self, node: ast.ExceptHandler):
         if not _is_empty_body(node.body):
             self.generic_visit(node)
@@ -98,25 +132,28 @@ class SilentExceptRule(ast.NodeVisitor):
             return
 
         names = _handler_names(node.type)
+        suspends = self._handler_suspends.get(id(node), False)
         if node.type is None:
-            # bare except: only in async context (swallows CancelledError etc.)
-            if not self._in_async:
+            # bare except: only in async context (swallows CancelledError etc.),
+            # and only if the try body can be suspended (where cancellation arrives)
+            if not self._in_async or not suspends:
                 self.generic_visit(node)
                 return
             severity = "CRITICAL"
             message = (
-                "bare except in an async function swallows every exception, including "
+                "bare except around an await swallows every exception, including "
                 "CancelledError, KeyboardInterrupt and SystemExit — breaking cancellation "
                 "and clean shutdown"
             )
         elif "BaseException" in names:
-            # except BaseException with an empty body: only in async context
-            if not self._in_async:
+            # except BaseException with an empty body: only in async context,
+            # and only if the try body can be suspended (where cancellation arrives)
+            if not self._in_async or not suspends:
                 self.generic_visit(node)
                 return
             severity = "CRITICAL"
             message = (
-                "except BaseException with an empty body swallows CancelledError, "
+                "except BaseException with an empty body around an await swallows CancelledError, "
                 "KeyboardInterrupt and SystemExit — breaking cancellation and clean shutdown"
             )
         elif "Exception" in names:
