@@ -10,6 +10,44 @@ _BROAD_EXCEPTIONS = {"Exception", "BaseException"}
 # leak of an ordinary exception, so it does not break containment.
 _CANCELLATION = {"CancelledError", "KeyboardInterrupt", "SystemExit"}
 
+# A synchronous call on the task's path, outside any swallowing try, can itself
+# raise and escape — so it breaks containment. The only exceptions are this short
+# whitelist of calls that do not raise for in-range inputs in normal use. Each
+# entry is justified; project/HTTP/DB/validation calls are deliberately absent, so
+# a synchronous validation that raises before the try (e.g. assert_in_scope) keeps
+# the finding.
+# Builtins that do not raise for ordinary inputs:
+_SAFE_CALL_NAMES = {
+    "isinstance", "issubclass",   # type checks, never raise for normal args
+    "len", "bool", "str", "repr", "ascii",  # total on normal objects
+    "hasattr",                    # returns False instead of raising
+    "id", "type", "callable",     # introspection, never raise
+    "list", "dict", "tuple", "set", "frozenset",  # constructors over iterables
+    "enumerate", "range", "sorted", "reversed", "zip",  # iteration helpers
+    "any", "all",                 # boolean folds
+}
+# Methods that do not raise on their normal receiver:
+_SAFE_CALL_METHODS = {
+    "get", "keys", "values", "items", "copy", "setdefault",  # dict reads/merges
+    "append", "add", "extend", "update",                      # collection growth
+    "strip", "lstrip", "rstrip", "lower", "upper", "title",   # str transforms
+    "split", "rsplit", "splitlines", "join",                  # str split/join
+    "startswith", "endswith", "format",                       # str predicates/format
+    "isoformat",                                              # datetime -> str
+    "debug", "info", "warning", "error", "exception", "critical", "log",  # logging
+}
+
+
+def _call_is_safe(call: ast.Call) -> bool:
+    f = call.func
+    if isinstance(f, ast.Name):
+        if f.id == "getattr":
+            return len(call.args) >= 3  # getattr with a default never raises
+        return f.id in _SAFE_CALL_NAMES
+    if isinstance(f, ast.Attribute):
+        return f.attr in _SAFE_CALL_METHODS
+    return False
+
 
 class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     """
@@ -32,8 +70,12 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     ``asyncio.ensure_future`` / ``create_task`` of a contained awaitable;
     ``asyncio.to_thread`` of a plain def that contains its exceptions; a call to
     another contained function); and the function raises no ordinary exception
-    outside a cancellation handler. Synchronous statements outside the try are
-    allowed (only the awaited I/O must be guarded). Resolution follows nested
+    outside a cancellation handler. A *synchronous* call outside a swallowing try
+    (on the task's path) can itself raise and escape, so it breaks containment
+    unless it is on a short whitelist of calls that do not raise in normal use
+    (safe builtins, str/dict/collection/logging methods, ``getattr`` with a
+    default); a validation that raises before the try therefore keeps the finding.
+    Resolution follows nested
     defs, ``self.f`` / ``cls.f`` methods and module functions; recursion is
     assumed contained. Awaitable forms understood: ``f(...)``, ``*[...]``,
     ``*(...)``, ``*a, *b``, a local name bound once to a list literal (+append)
@@ -231,6 +273,15 @@ class _Containment:
             if isinstance(node, ast.Await):
                 if protect == 0 and not self.awaitable_contained(node.value, func):
                     ok[0] = False
+                return
+            if isinstance(node, ast.Call):
+                # A synchronous call outside a swallowing try can raise and escape
+                # (an awaited call is handled above and never reaches here).
+                if protect == 0 and not _call_is_safe(node):
+                    ok[0] = False
+                    return
+                for child in ast.iter_child_nodes(node):
+                    walk(child, protect, in_cancel)
                 return
             if isinstance(node, ast.Try):
                 # A non-trivial `finally` runs on every path and can raise and
