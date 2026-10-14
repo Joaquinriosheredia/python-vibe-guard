@@ -386,15 +386,69 @@ async def process_file(path):
     assert violations[0].function_name == "process_file"
 
 
-def test_007_detects_subprocess_popen_in_async():
+def test_007_popen_without_wait_is_not_blocking():
+    # subprocess.Popen on its own only starts the child and returns a handle;
+    # it does not block the event loop, so it is not reported (fixture C164).
+    src = """
+import subprocess
+async def start_child():
+    proc = subprocess.Popen(["tcpdump", "-w", "cap.pcap"])
+    return proc
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 0
+
+
+def test_007_detects_popen_with_wait():
     src = """
 import subprocess
 async def get_output():
     proc = subprocess.Popen(["git", "log"], stdout=-1)
+    proc.wait()
 """
     violations = analyze_source(src)
     assert len(violations) == 1
     assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].function_name == "get_output"
+
+
+def test_007_detects_popen_with_communicate():
+    src = """
+import subprocess
+async def get_output():
+    proc = subprocess.Popen(["git", "log"], stdout=-1)
+    out, err = proc.communicate()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_detects_popen_inline_communicate():
+    src = """
+import subprocess
+async def get_output():
+    out, err = subprocess.Popen(["git", "log"], stdout=-1).communicate()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_popen_waited_only_flags_the_waited_one():
+    # Two Popens: one is waited, one is not; only the waited one is reported.
+    src = """
+import subprocess
+async def run_both():
+    started = subprocess.Popen(["tcpdump", "-w", "cap.pcap"])
+    blocking = subprocess.Popen(["git", "log"], stdout=-1)
+    blocking.communicate()
+    return started
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].line == 5  # the 'blocking' Popen, not 'started'
 
 
 def test_007_no_false_positive_bare_import():
@@ -447,10 +501,12 @@ def test_007_suggested_fix_for_popen():
 import subprocess
 async def get_output():
     proc = subprocess.Popen(["git", "log"], stdout=-1)
+    proc.wait()
 """
     violations = analyze_source(src)
     assert violations[0].suggested_fix == (
-        'proc = await asyncio.create_subprocess_exec("git", "log")'
+        'proc = await asyncio.create_subprocess_exec("git", "log")\n'
+        "stdout, stderr = await proc.communicate()"
     )
 
 
