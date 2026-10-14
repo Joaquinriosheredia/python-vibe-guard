@@ -7,7 +7,7 @@ Usage:
     python -m pyvibe <path> --json            # machine-readable output
     python -m pyvibe <path> --sarif           # SARIF 2.1.0 -> results.sarif
     python -m pyvibe <path> --no-test-files   # skip test files entirely
-    python -m pyvibe <path> --downgrade-in-tests  # WARNING instead of CRITICAL in all test files
+    python -m pyvibe <path> --downgrade-in-tests  # (default) CRITICAL -> WARNING in non-production files
     python -m pyvibe explain PYVIBE-002       # show research evidence for a rule
     python -m pyvibe review                   # PR review: only diff-touched lines (git diff HEAD~1)
     python -m pyvibe review --base main       # diff against another ref
@@ -39,7 +39,6 @@ from pyvibe.analyzer import (
     analyze_directory_full,
     DEFAULT_EXCLUDES,
     ALL_RULE_IDS,
-    TEST_FILE_DOWNGRADE,
     _is_test_file,
 )
 from pyvibe.baseline import DEFAULT_BASELINE_PATH
@@ -108,8 +107,9 @@ def main():
         "--downgrade-in-tests",
         action="store_true",
         help=(
-            "Downgrade ALL violations in test files from CRITICAL to WARNING. "
-            "Default: only PYVIBE-001, PYVIBE-007, and PYVIBE-013 are downgraded."
+            "Kept for compatibility; this is now the default: every rule's CRITICAL "
+            "is downgraded to WARNING in test and non-production files (test_*.py, "
+            "*_test.py, conftest.py, or under tests/ test/ scripts/ wip/ spike/ examples/)."
         ),
     )
     parser.add_argument(
@@ -170,12 +170,11 @@ def _resolve_file_results(args) -> Tuple[dict, List[Tuple[Path, object, str]]]:
     if args.no_test_files:
         skip_test_files = True
         downgrade_in_tests = frozenset()
-    elif args.downgrade_in_tests:
+    else:
+        # Same as the library default (path-based downgrade for every rule), so
+        # the CLI and analyze_* behave identically; --downgrade-in-tests is a no-op.
         skip_test_files = False
         downgrade_in_tests = ALL_RULE_IDS
-    else:
-        skip_test_files = False
-        downgrade_in_tests = TEST_FILE_DOWNGRADE
 
     if target.is_file():
         if target.suffix != ".py":
@@ -435,7 +434,7 @@ def _main_scan(argv):
     parser.add_argument(
         "--downgrade-in-tests",
         action="store_true",
-        help="Downgrade ALL violations in test files from CRITICAL to WARNING",
+        help="Kept for compatibility; now the default (every rule's CRITICAL -> WARNING in non-production files)",
     )
     parser.add_argument(
         "--baseline",
