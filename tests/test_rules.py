@@ -386,15 +386,109 @@ async def process_file(path):
     assert violations[0].function_name == "process_file"
 
 
-def test_007_detects_subprocess_popen_in_async():
+def test_007_popen_daemon_not_waited_is_not_blocking_dl001():
+    # Regression for dev-labels.json DL-001 (ARES infrastructure.py:244,
+    # establish_socks5): Popen starts a long-running child and returns; the only
+    # follow-up is `await asyncio.sleep` (yields the loop) and `.poll()`
+    # (non-blocking). No .wait()/.communicate() -> not reported.
+    src = """
+import asyncio
+import subprocess
+async def establish_socks5(cmd, tunnel):
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    await asyncio.sleep(1.5)
+    if proc.poll() is not None:
+        tunnel.state = "dead"
+    else:
+        tunnel._proc = proc
+"""
+    violations = analyze_source(src)
+    assert [v for v in violations if v.rule_id == "PYVIBE-007"] == []
+
+
+def test_007_popen_daemon_not_waited_is_not_blocking_dl002():
+    # Regression for dev-labels.json DL-002 (ARES infrastructure.py:367,
+    # establish_local_forward; review-set id C164): same mechanism as DL-001.
+    src = """
+import asyncio
+import subprocess
+async def establish_local_forward(cmd, tunnel):
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    await asyncio.sleep(1.5)
+    if proc.poll() is not None:
+        tunnel.state = "dead"
+    else:
+        tunnel._proc = proc
+"""
+    violations = analyze_source(src)
+    assert [v for v in violations if v.rule_id == "PYVIBE-007"] == []
+
+
+def test_007_detects_popen_with_wait():
     src = """
 import subprocess
 async def get_output():
     proc = subprocess.Popen(["git", "log"], stdout=-1)
+    proc.wait()
 """
     violations = analyze_source(src)
     assert len(violations) == 1
     assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].function_name == "get_output"
+    # Message must describe the waited Popen, not subprocess.run (overstated).
+    msg = violations[0].message
+    assert "Popen" in msg
+    assert ".wait()/.communicate()" in msg
+    assert "subprocess.run" not in msg
+
+
+def test_007_detects_popen_with_communicate():
+    src = """
+import subprocess
+async def get_output():
+    proc = subprocess.Popen(["git", "log"], stdout=-1)
+    out, err = proc.communicate()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_detects_popen_inline_communicate():
+    src = """
+import subprocess
+async def get_output():
+    out, err = subprocess.Popen(["git", "log"], stdout=-1).communicate()
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+
+
+def test_007_popen_waited_only_flags_the_waited_one():
+    # Two Popens: one is waited, one is not; only the waited one is reported.
+    src = """
+import subprocess
+async def run_both():
+    started = subprocess.Popen(["tcpdump", "-w", "cap.pcap"])
+    blocking = subprocess.Popen(["git", "log"], stdout=-1)
+    blocking.communicate()
+    return started
+"""
+    violations = analyze_source(src)
+    assert len(violations) == 1
+    assert violations[0].rule_id == "PYVIBE-007"
+    assert violations[0].line == 5  # the 'blocking' Popen, not 'started'
 
 
 def test_007_no_false_positive_bare_import():
@@ -447,10 +541,12 @@ def test_007_suggested_fix_for_popen():
 import subprocess
 async def get_output():
     proc = subprocess.Popen(["git", "log"], stdout=-1)
+    proc.wait()
 """
     violations = analyze_source(src)
     assert violations[0].suggested_fix == (
-        'proc = await asyncio.create_subprocess_exec("git", "log")'
+        'proc = await asyncio.create_subprocess_exec("git", "log")\n'
+        "stdout, stderr = await proc.communicate()"
     )
 
 
