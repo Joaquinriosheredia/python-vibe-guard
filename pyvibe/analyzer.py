@@ -1,4 +1,5 @@
 import ast
+import os
 from pathlib import Path
 from typing import FrozenSet, List, Optional, Tuple
 
@@ -102,6 +103,21 @@ def _is_test_file(filepath: str) -> bool:
     )
 
 
+def _scan_relative(path: Path, root: Optional[Path]) -> str:
+    """The path of `path` inside the scan root, for the path-based downgrade.
+
+    Only directory segments INSIDE the scanned root count: a repository cloned
+    under `.../scripts/x` or `.../tests/x` is not a non-production directory.
+    With no root (a single file), the file's own directory is the root, so only
+    the filename counts. Absolute and relative paths give the same result.
+    """
+    base = root if root is not None else path.parent
+    try:
+        return str(Path(os.path.abspath(path)).relative_to(os.path.abspath(base)))
+    except ValueError:
+        return path.name
+
+
 def analyze_source_full(
     source: str,
     filepath: str = "<string>",
@@ -186,28 +202,35 @@ def analyze_source(
 def analyze_file_full(
     path: Path,
     *,
+    root: Optional[Path] = None,
     downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     config: Optional[PyvibeConfig] = None,
 ) -> Tuple[List[Violation], List[Tuple[Violation, str]]]:
+    """root: the scan root; only path segments inside it drive the downgrade
+    (see _scan_relative). None means the file's own directory."""
     source = path.read_text(encoding="utf-8", errors="ignore")
     return analyze_source_full(
-        source, filepath=str(path), downgrade_in_tests=downgrade_in_tests, config=config
+        source, filepath=_scan_relative(path, root),
+        downgrade_in_tests=downgrade_in_tests, config=config,
     )
 
 
 def analyze_file(
     path: Path,
     *,
+    root: Optional[Path] = None,
     downgrade_in_tests: FrozenSet[str] = ALL_RULE_IDS,
     line_filter: Optional[FrozenSet[int]] = None,
     config: Optional[PyvibeConfig] = None,
 ) -> List[Violation]:
     """line_filter: if given, only violations whose `line` is in this set
     are returned (used by `pyvibe review` to report only diff-touched lines).
+    root: the scan root (see analyze_file_full).
     """
     source = path.read_text(encoding="utf-8", errors="ignore")
     violations = analyze_source(
-        source, filepath=str(path), downgrade_in_tests=downgrade_in_tests, config=config
+        source, filepath=_scan_relative(path, root),
+        downgrade_in_tests=downgrade_in_tests, config=config,
     )
     if line_filter is not None:
         violations = [v for v in violations if v.line in line_filter]
@@ -238,11 +261,13 @@ def analyze_directory(
     """
     results = {}
     for py_file in _walk(root, exclude):
-        if skip_test_files and _is_test_file(str(py_file)):
+        if skip_test_files and _is_test_file(_scan_relative(py_file, root)):
             continue
         if config and is_excluded(py_file, config):
             continue
-        violations = analyze_file(py_file, downgrade_in_tests=downgrade_in_tests, config=config)
+        violations = analyze_file(
+            py_file, root=root, downgrade_in_tests=downgrade_in_tests, config=config
+        )
         if violations:
             results[py_file] = violations
     return results
@@ -262,12 +287,12 @@ def analyze_directory_full(
     results = {}
     all_suppressed: List[Tuple[Path, Violation, str]] = []
     for py_file in _walk(root, exclude):
-        if skip_test_files and _is_test_file(str(py_file)):
+        if skip_test_files and _is_test_file(_scan_relative(py_file, root)):
             continue
         if config and is_excluded(py_file, config):
             continue
         reported, suppressed = analyze_file_full(
-            py_file, downgrade_in_tests=downgrade_in_tests, config=config
+            py_file, root=root, downgrade_in_tests=downgrade_in_tests, config=config
         )
         if reported:
             results[py_file] = reported
