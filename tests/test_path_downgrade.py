@@ -7,9 +7,15 @@ contains `tests` are NOT downgraded.
 Regression fixtures cite vibe-guard-evaluation dev-labels.json; the matcher unit
 tests are mechanism tests (including the two mandatory negatives).
 """
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
-from pyvibe.analyzer import analyze_source
+from pyvibe.analyzer import analyze_directory, analyze_source
 
 # A gather() with unresolved awaitables → PYVIBE-013 CRITICAL in production.
 GATHER = "import asyncio\nasync def handler():\n    await asyncio.gather(a(), b())\n"
@@ -64,3 +70,43 @@ def test_c_never_silences():
     # The finding is kept in every case — only its severity changes.
     assert len(_013(GATHER, "tests/x.py")) == 1
     assert len(_013(GATHER, "app/x.py")) == 1
+
+
+# ── CLI and library behave the same (decision 2026-10-14) ────────────────────
+
+# PYVIBE-004 is outside the old short TEST_FILE_DOWNGRADE list: before the fix
+# the CLI kept it CRITICAL in tests/ while the library downgraded it.
+LOCK = "import threading\nasync def handler():\n    lock = threading.Lock()\n    with lock:\n        pass\n"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _cli_json(args, cwd):
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    r = subprocess.run([sys.executable, "-m", "pyvibe", *args, "--json"],
+                       cwd=cwd, capture_output=True, text=True, env=env)
+    return json.loads(r.stdout)
+
+
+@pytest.mark.parametrize("extra", [[], ["--downgrade-in-tests"]])
+def test_cli_critical_in_tests_dir_is_warning_like_library(tmp_path, extra):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_lock.py").write_text(LOCK)
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "lock.py").write_text(LOCK)
+
+    cli = {(f["file"].replace(str(tmp_path) + "/", ""), f["rule"], f["line"], f["severity"])
+           for f in _cli_json([str(tmp_path), *extra], cwd=tmp_path)}
+    lib = {(str(p.relative_to(tmp_path)), v.rule_id, v.line, v.severity)
+           for p, vs in analyze_directory(tmp_path).items() for v in vs}
+
+    assert ("tests/test_lock.py", "PYVIBE-004", 3, "WARNING") in cli
+    assert ("app/lock.py", "PYVIBE-004", 3, "CRITICAL") in cli
+    assert cli == lib
+
+
+def test_cli_single_test_file_critical_is_warning(tmp_path):
+    (tmp_path / "tests").mkdir()
+    f = tmp_path / "tests" / "test_lock.py"
+    f.write_text(LOCK)
+    out = _cli_json([str(f)], cwd=tmp_path)
+    assert [(x["rule"], x["severity"]) for x in out] == [("PYVIBE-004", "WARNING")]
