@@ -261,7 +261,7 @@ class _Containment:
     def _analyze(self, func: FuncDef) -> bool:
         ok = [True]
 
-        def walk(node: ast.AST, protect: int, in_cancel: bool):
+        def walk(node: ast.AST, protect: int, in_cancel: bool, in_handler: bool):
             if not ok[0]:
                 return
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
@@ -275,13 +275,15 @@ class _Containment:
                     ok[0] = False
                 return
             if isinstance(node, ast.Call):
-                # A synchronous call outside a swallowing try can raise and escape
-                # (an awaited call is handled above and never reaches here).
-                if protect == 0 and not _call_is_safe(node):
+                # A synchronous call on the task's *normal* path, outside a
+                # swallowing try, can raise and escape (an awaited call is handled
+                # above). Calls inside an except handler run only after an
+                # exception was already caught, so they are not on that path.
+                if protect == 0 and not in_handler and not _call_is_safe(node):
                     ok[0] = False
                     return
                 for child in ast.iter_child_nodes(node):
-                    walk(child, protect, in_cancel)
+                    walk(child, protect, in_cancel, in_handler)
                 return
             if isinstance(node, ast.Try):
                 # A non-trivial `finally` runs on every path and can raise and
@@ -295,21 +297,19 @@ class _Containment:
                     return
                 swallow = _try_is_swallowing(node)
                 for s in node.body:
-                    walk(s, protect + (1 if swallow else 0), in_cancel)
+                    walk(s, protect + (1 if swallow else 0), in_cancel, in_handler)
                 for h in node.handlers:
                     cancel = _handler_is_cancellation_only(h)
                     for s in h.body:
-                        walk(s, protect, cancel)
+                        walk(s, protect, cancel, True)
                 for s in node.orelse:
-                    walk(s, protect, in_cancel)
-                for s in node.finalbody:
-                    walk(s, protect, in_cancel)
+                    walk(s, protect, in_cancel, in_handler)
                 return
             for child in ast.iter_child_nodes(node):
-                walk(child, protect, in_cancel)
+                walk(child, protect, in_cancel, in_handler)
 
         for stmt in func.body:
-            walk(stmt, 0, False)
+            walk(stmt, 0, False, False)
         return ok[0]
 
     # -- local name bound to a list literal (+ append) ----------------------
