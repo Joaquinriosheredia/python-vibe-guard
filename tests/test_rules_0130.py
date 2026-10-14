@@ -381,7 +381,7 @@ async def page(db, companies):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="known false negative (dev-labels DL-046, ARES scan_hosts, #3): a "
+    reason="known false negative (dev-labels DL-049, ARES scan_hosts, #3): a "
     "synchronous validation that raises BEFORE the try (e.g. scope_guard."
     "assert_in_scope) escapes the task, but PYVIBE-013 requires a concrete I/O "
     "failure escaping the awaited call, so it is not detected. Decision 2026-10-14.",
