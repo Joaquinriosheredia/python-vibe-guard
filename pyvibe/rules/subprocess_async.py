@@ -130,12 +130,23 @@ class SubprocessAsyncRule(AsyncBlockingCallVisitor):
             method = None
 
         if method:
+            if method == POPEN:
+                # Popen only reaches here when its result is waited on with a
+                # synchronous .wait()/.communicate(); describe that, not run().
+                message = (
+                    "subprocess.Popen(...) result waited on synchronously with "
+                    ".wait()/.communicate() blocks the event loop until the subprocess exits"
+                )
+            else:
+                message = (
+                    f"subprocess.{method}() blocks the event loop for the entire subprocess duration"
+                )
             self.violations.append(Violation(
                 rule_id=self.RULE_ID,
                 severity=self.SEVERITY,
                 line=node.lineno,
                 function_name=self._current_async_func,
-                message=f"subprocess.{method}() blocks the event loop for the entire subprocess duration",
+                message=message,
                 evidence="Use `proc = await asyncio.create_subprocess_exec(*cmd)` then `await proc.communicate()`",
                 suggested_fix=self._suggest_fix(node, method),
             ))

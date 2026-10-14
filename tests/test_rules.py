@@ -386,17 +386,52 @@ async def process_file(path):
     assert violations[0].function_name == "process_file"
 
 
-def test_007_popen_without_wait_is_not_blocking():
-    # subprocess.Popen on its own only starts the child and returns a handle;
-    # it does not block the event loop, so it is not reported (fixture C164).
+def test_007_popen_daemon_not_waited_is_not_blocking_dl001():
+    # Regression for dev-labels.json DL-001 (ARES infrastructure.py:244,
+    # establish_socks5): Popen starts a long-running child and returns; the only
+    # follow-up is `await asyncio.sleep` (yields the loop) and `.poll()`
+    # (non-blocking). No .wait()/.communicate() -> not reported.
     src = """
+import asyncio
 import subprocess
-async def start_child():
-    proc = subprocess.Popen(["tcpdump", "-w", "cap.pcap"])
-    return proc
+async def establish_socks5(cmd, tunnel):
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    await asyncio.sleep(1.5)
+    if proc.poll() is not None:
+        tunnel.state = "dead"
+    else:
+        tunnel._proc = proc
 """
     violations = analyze_source(src)
-    assert len(violations) == 0
+    assert [v for v in violations if v.rule_id == "PYVIBE-007"] == []
+
+
+def test_007_popen_daemon_not_waited_is_not_blocking_dl002():
+    # Regression for dev-labels.json DL-002 (ARES infrastructure.py:367,
+    # establish_local_forward; review-set id C164): same mechanism as DL-001.
+    src = """
+import asyncio
+import subprocess
+async def establish_local_forward(cmd, tunnel):
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    await asyncio.sleep(1.5)
+    if proc.poll() is not None:
+        tunnel.state = "dead"
+    else:
+        tunnel._proc = proc
+"""
+    violations = analyze_source(src)
+    assert [v for v in violations if v.rule_id == "PYVIBE-007"] == []
 
 
 def test_007_detects_popen_with_wait():
@@ -410,6 +445,11 @@ async def get_output():
     assert len(violations) == 1
     assert violations[0].rule_id == "PYVIBE-007"
     assert violations[0].function_name == "get_output"
+    # Message must describe the waited Popen, not subprocess.run (overstated).
+    msg = violations[0].message
+    assert "Popen" in msg
+    assert ".wait()/.communicate()" in msg
+    assert "subprocess.run" not in msg
 
 
 def test_007_detects_popen_with_communicate():
