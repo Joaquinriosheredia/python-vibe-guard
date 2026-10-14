@@ -1,11 +1,14 @@
 import ast
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Set, Union
 
 from pyvibe.rules.base import Violation, AsyncContextVisitor
 
 FuncDef = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 
 _BROAD_EXCEPTIONS = {"Exception", "BaseException"}
+# Re-raising these is correct practice (cancellation / interpreter exit), not a
+# leak of an ordinary exception, so it does not break containment.
+_CANCELLATION = {"CancelledError", "KeyboardInterrupt", "SystemExit"}
 
 
 class GatherNoReturnExceptionsRule(AsyncContextVisitor):
@@ -15,21 +18,35 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     Without return_exceptions=True, the first exception raised by any of the
     gathered awaitables propagates to the gather() caller. The other awaitables
     are NOT cancelled: they keep running with nobody observing their results or
-    their later exceptions ("Task exception was never retrieved"). No memory is
-    lost for good; the work and its failures go unobserved.
+    their later exceptions ("Task exception was never retrieved").
 
     Not reported when this file shows that none of the gathered awaitables can
-    raise an ordinary exception: each one resolves, in the same module, to a
-    function whose whole body (at most a docstring before it) is a single try
-    with no else/finally, at least one handler catching Exception, BaseException
-    or everything, and no raise in any handler; or to asyncio.sleep(). Resolved
-    forms: f(...) for an undecorated async def of the module, a nested one or
-    self.f/cls.f of the same class; asyncio.to_thread(f, ...) for a plain def;
-    asyncio.ensure_future(x) and asyncio.create_task(x); *[f(a) for ...] and
-    *(f(a) for ...); *tasks for a local list only ever built from a list literal
-    and tasks.append(x). Anything else (a parameter, an attribute, an imported
-    function, a lambda, statements outside the try) is reported: in doubt, the
-    finding stays.
+    raise an ordinary exception: each resolves (same module/class/nested scope)
+    to a function that *contains* its exceptions. A function contains its
+    exceptions when every ``await`` in its body is either (a) lexically inside a
+    ``try`` whose handlers include a broad one (Exception / BaseException /
+    bare) and none of which re-raise an ordinary exception — re-raising
+    CancelledError / KeyboardInterrupt / SystemExit is allowed — or (b) an await
+    of an expression that itself cannot raise an ordinary exception
+    (``asyncio.sleep``; ``asyncio.gather`` whose awaitables are all contained;
+    ``asyncio.ensure_future`` / ``create_task`` of a contained awaitable;
+    ``asyncio.to_thread`` of a plain def that contains its exceptions; a call to
+    another contained function); and the function raises no ordinary exception
+    outside a cancellation handler. Synchronous statements outside the try are
+    allowed (only the awaited I/O must be guarded). Resolution follows nested
+    defs, ``self.f`` / ``cls.f`` methods and module functions; recursion is
+    assumed contained. Awaitable forms understood: ``f(...)``, ``*[...]``,
+    ``*(...)``, ``*a, *b``, a local name bound once to a list literal (+append)
+    or to a plain comprehension. Anything not resolved or not understood is
+    reported: in doubt, the finding stays.
+
+    Known limitation (decision 2026-10-14): the rule targets a concrete I/O
+    failure (network, API, DB) that escapes the awaited call and propagates
+    through gather. A *synchronous* statement outside the try that raises — for
+    example a validation such as ``scope_guard.assert_in_scope(...)`` run before
+    the try — is a false negative: it is not detected, because allowing ordinary
+    synchronous statements outside the try is what keeps the common guarded
+    pattern from being over-reported. Covered by an xfail regression test.
 
     Fix: add return_exceptions=True and inspect the result list, or use
     asyncio.TaskGroup (Python 3.11+) for explicit structured concurrency.
@@ -108,66 +125,156 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
                 return True
         return False
 
+    # ─── containment analysis ─────────────────────────────────────────────────
+
+    def _scope(self) -> "_Containment":
+        return _Containment(self._module_funcs, self._func_stack, self._class_stack)
+
     def _all_awaitables_contained(self, node: ast.Call) -> bool:
         # Any keyword other than return_exceptions (e.g. **kwargs) is not understood.
         if any(kw.arg != "return_exceptions" for kw in node.keywords):
             return False
         if not node.args:
             return False
-        return all(self._arg_contained(arg) for arg in node.args)
+        scope = self._scope()
+        host = self._func_stack[-1] if self._func_stack else None
+        return all(scope.arg_contained(arg, host) for arg in node.args)
 
-    def _arg_contained(self, arg: ast.expr) -> bool:
+
+class _Containment:
+    """Resolves awaitables and decides whether each cannot raise an ordinary
+    exception, following nested/method/module scope, with memoisation and cycle
+    handling.  Unknown → not contained (the finding stays)."""
+
+    def __init__(self, module_funcs, func_stack, class_stack):
+        # Flat lexical scope seen from the gather site: module funcs, overridden
+        # by each enclosing function's defs (outer→inner so inner wins), which
+        # also exposes sibling nested defs (e.g. a recursive _build_tree).
+        self._flat: Dict[str, List[FuncDef]] = dict(module_funcs)
+        for f in func_stack:
+            self._flat.update(_defs_in(f.body))
+        self._class = class_stack[-1] if class_stack else None
+        self._memo: Dict[int, bool] = {}
+        self._inprogress: Set[int] = set()
+
+    # -- resolution ---------------------------------------------------------
+    def _resolve(self, ref: ast.expr, host: Optional[FuncDef]) -> Optional[FuncDef]:
+        if isinstance(ref, ast.Name):
+            if host is not None:
+                own = _defs_in(host.body)
+                if ref.id in own:
+                    return _single_plain(own[ref.id])
+            return _single_plain(self._flat.get(ref.id))
+        if (
+            isinstance(ref, ast.Attribute)
+            and isinstance(ref.value, ast.Name)
+            and ref.value.id in ("self", "cls")
+            and self._class is not None
+        ):
+            return _single_plain(_defs_in(self._class.body).get(ref.attr))
+        return None
+
+    # -- gather argument forms ----------------------------------------------
+    def arg_contained(self, arg: ast.expr, host: Optional[FuncDef]) -> bool:
         if isinstance(arg, ast.Starred):
             value = arg.value
-            if isinstance(value, (ast.ListComp, ast.GeneratorExp)) and not _plain_comprehension(value):
-                return False
             if isinstance(value, (ast.ListComp, ast.GeneratorExp)):
-                return self._awaitable_contained(value.elt)
+                return _plain_comprehension(value) and self.awaitable_contained(value.elt, host)
             if isinstance(value, ast.Name):
-                elements = self._local_list_elements(value.id)
-                return elements is not None and all(self._awaitable_contained(e) for e in elements)
+                elements = self._local_list_elements(value.id, host)
+                if elements is None:
+                    comp = self._local_comprehension(value.id, host)
+                    if comp is None:
+                        return False
+                    return self.awaitable_contained(comp.elt, host)
+                return all(self.awaitable_contained(e, host) for e in elements)
             return False
-        return self._awaitable_contained(arg)
+        return self.awaitable_contained(arg, host)
 
-    def _awaitable_contained(self, expr: ast.expr) -> bool:
+    # -- an awaitable expression cannot raise an ordinary exception ----------
+    def awaitable_contained(self, expr: ast.expr, host: Optional[FuncDef]) -> bool:
         if not isinstance(expr, ast.Call):
             return False
         if _is_asyncio_call(expr, "sleep"):
             return True
         if _is_asyncio_call(expr, "ensure_future") or _is_asyncio_call(expr, "create_task"):
-            return len(expr.args) >= 1 and self._awaitable_contained(expr.args[0])
+            return len(expr.args) >= 1 and self.awaitable_contained(expr.args[0], host)
+        if _is_asyncio_call(expr, "gather"):
+            if any(kw.arg != "return_exceptions" for kw in expr.keywords) or not expr.args:
+                return False
+            return all(self.arg_contained(a, host) for a in expr.args)
         if _is_asyncio_call(expr, "to_thread"):
             if not expr.args:
                 return False
-            func = self._resolve(expr.args[0])
-            return isinstance(func, ast.FunctionDef) and _body_contains_exceptions(func)
-        func = self._resolve(expr.func)
-        return isinstance(func, ast.AsyncFunctionDef) and _body_contains_exceptions(func)
+            func = self._resolve(expr.args[0], host)
+            return isinstance(func, ast.FunctionDef) and _sync_contains_exceptions(func)
+        func = self._resolve(expr.func, host)
+        return func is not None and self.func_contained(func)
 
-    def _resolve(self, ref: ast.expr) -> Optional[FuncDef]:
-        """The single undecorated def a name or self.f/cls.f refers to, or None."""
-        if isinstance(ref, ast.Name):
-            for scope in reversed(self._func_stack):
-                found = _defs_in(scope.body).get(ref.id)
-                if found is not None:
-                    return _single_plain(found)
-            return _single_plain(self._module_funcs.get(ref.id))
-        if (
-            isinstance(ref, ast.Attribute)
-            and isinstance(ref.value, ast.Name)
-            and ref.value.id in ("self", "cls")
-            and self._class_stack
-        ):
-            return _single_plain(_defs_in(self._class_stack[-1].body).get(ref.attr))
-        return None
+    # -- a function contains its exceptions ---------------------------------
+    def func_contained(self, func: FuncDef) -> bool:
+        key = id(func)
+        if key in self._memo:
+            return self._memo[key]
+        if key in self._inprogress:
+            return True  # recursion: assume contained (the awaits are checked elsewhere)
+        self._inprogress.add(key)
+        result = self._analyze(func)
+        self._inprogress.discard(key)
+        self._memo[key] = result
+        return result
 
-    def _local_list_elements(self, name: str) -> Optional[List[ast.expr]]:
-        """Elements of a local list built only from a list literal and name.append(x)."""
-        if not self._func_stack:
+    def _analyze(self, func: FuncDef) -> bool:
+        ok = [True]
+
+        def walk(node: ast.AST, protect: int, in_cancel: bool):
+            if not ok[0]:
+                return
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                return  # a different scope; analysed when called
+            if isinstance(node, ast.Raise):
+                if not in_cancel:
+                    ok[0] = False
+                return
+            if isinstance(node, ast.Await):
+                if protect == 0 and not self.awaitable_contained(node.value, func):
+                    ok[0] = False
+                return
+            if isinstance(node, ast.Try):
+                # A non-trivial `finally` runs on every path and can raise and
+                # escape, so it breaks containment (conservative: protects TPs).
+                if any(
+                    isinstance(n, (ast.Call, ast.Await, ast.Raise))
+                    for s in node.finalbody
+                    for n in ast.walk(s)
+                ):
+                    ok[0] = False
+                    return
+                swallow = _try_is_swallowing(node)
+                for s in node.body:
+                    walk(s, protect + (1 if swallow else 0), in_cancel)
+                for h in node.handlers:
+                    cancel = _handler_is_cancellation_only(h)
+                    for s in h.body:
+                        walk(s, protect, cancel)
+                for s in node.orelse:
+                    walk(s, protect, in_cancel)
+                for s in node.finalbody:
+                    walk(s, protect, in_cancel)
+                return
+            for child in ast.iter_child_nodes(node):
+                walk(child, protect, in_cancel)
+
+        for stmt in func.body:
+            walk(stmt, 0, False)
+        return ok[0]
+
+    # -- local name bound to a list literal (+ append) ----------------------
+    def _local_list_elements(self, name: str, func: Optional[FuncDef]) -> Optional[List[ast.expr]]:
+        if func is None:
             return None
-        func = self._func_stack[-1]
         elements: List[ast.expr] = []
-        allowed = set()  # ids of Name nodes whose use is understood
+        allowed = set()
         literal_seen = False
         for node in ast.walk(func):
             if isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -190,20 +297,43 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
             ):
                 elements.append(node.value.args[0])
                 allowed.add(id(node.value.func.value))
-            elif (
-                isinstance(node, ast.Call)
-                and _is_asyncio_call(node, "gather")
-            ):
+            elif isinstance(node, ast.Call) and _is_asyncio_call(node, "gather"):
                 for a in node.args:
                     if isinstance(a, ast.Starred) and isinstance(a.value, ast.Name) and a.value.id == name:
                         allowed.add(id(a.value))
         if not literal_seen:
             return None
-        # Any other use of the name (extend, +=, reassignment, passed elsewhere) → unknown.
         for node in ast.walk(func):
             if isinstance(node, ast.Name) and node.id == name and id(node) not in allowed:
                 return None
         return elements
+
+    # -- local name bound exactly once to a plain comprehension -------------
+    def _local_comprehension(self, name: str, func: Optional[FuncDef]):
+        if func is None:
+            return None
+        found = None
+        for node in ast.walk(func):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(isinstance(t, ast.Name) and t.id == name for t in targets):
+                    value = node.value
+                    if (
+                        len(targets) == 1
+                        and found is None
+                        and isinstance(value, (ast.ListComp, ast.GeneratorExp))
+                        and _plain_comprehension(value)
+                    ):
+                        found = value
+                    else:
+                        return None  # reassigned / not a plain comprehension
+            elif (
+                isinstance(node, ast.AugAssign)
+                and isinstance(node.target, ast.Name)
+                and node.target.id == name
+            ):
+                return None
+        return found
 
 
 def _is_asyncio_call(node: ast.Call, attr: str) -> bool:
@@ -216,11 +346,38 @@ def _is_asyncio_call(node: ast.Call, attr: str) -> bool:
 
 
 def _defs_in(body: List[ast.stmt]) -> Dict[str, List[FuncDef]]:
+    """All functions defined lexically in this body, including those nested in
+    compound statements (``with`` / ``try`` / ``if`` / ``for`` …), but not those
+    inside a nested function or class (a different scope)."""
     defs: Dict[str, List[FuncDef]] = {}
-    for stmt in body:
-        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            defs.setdefault(stmt.name, []).append(stmt)
+
+    def rec(stmts: List[ast.stmt]):
+        for stmt in stmts:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                defs.setdefault(stmt.name, []).append(stmt)
+            elif isinstance(stmt, ast.ClassDef):
+                continue
+            else:
+                for sub in _stmt_bodies(stmt):
+                    rec(sub)
+
+    rec(body)
     return defs
+
+
+def _stmt_bodies(stmt: ast.stmt) -> List[List[ast.stmt]]:
+    """The statement-list bodies a compound statement owns directly."""
+    bodies: List[List[ast.stmt]] = []
+    for field, value in ast.iter_fields(stmt):
+        if isinstance(value, list):
+            if value and all(isinstance(v, ast.stmt) for v in value):
+                bodies.append(value)
+            else:
+                for v in value:
+                    inner = getattr(v, "body", None)  # ExceptHandler, match_case
+                    if isinstance(inner, list) and inner and all(isinstance(s, ast.stmt) for s in inner):
+                        bodies.append(inner)
+    return bodies
 
 
 def _single_plain(defs: Optional[List[FuncDef]]) -> Optional[FuncDef]:
@@ -235,10 +392,44 @@ def _plain_comprehension(comp: Union[ast.ListComp, ast.GeneratorExp]) -> bool:
     return all(not g.is_async for g in comp.generators)
 
 
-def _body_contains_exceptions(func: FuncDef) -> bool:
-    """The whole body (at most a docstring before it) is one try that catches
-    Exception, BaseException or everything, with no else, no finally and no
-    raise in any handler (decision of 2026-10-14: strict; in doubt, report)."""
+def _handler_is_cancellation_only(handler: ast.ExceptHandler) -> bool:
+    if handler.type is None:
+        return False
+    types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    names = []
+    for t in types:
+        if isinstance(t, ast.Name):
+            names.append(t.id)
+        elif isinstance(t, ast.Attribute):
+            names.append(t.attr)
+        else:
+            return False
+    return bool(names) and all(n in _CANCELLATION for n in names)
+
+
+def _is_broad(handler: ast.ExceptHandler) -> bool:
+    if handler.type is None:
+        return True
+    types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    return any(isinstance(t, ast.Name) and t.id in _BROAD_EXCEPTIONS for t in types)
+
+
+def _try_is_swallowing(try_node: ast.Try) -> bool:
+    """The try has a broad handler and no handler re-raises an ordinary
+    exception (a bare/typed re-raise in a cancellation-only handler is fine)."""
+    if not any(_is_broad(h) for h in try_node.handlers):
+        return False
+    for h in try_node.handlers:
+        if _handler_is_cancellation_only(h):
+            continue
+        if any(isinstance(n, ast.Raise) for n in ast.walk(h)):
+            return False
+    return True
+
+
+def _sync_contains_exceptions(func: FuncDef) -> bool:
+    """A plain def whose whole body (at most a docstring first) is one try that
+    swallows broadly with no else/finally and no ordinary re-raise."""
     body = func.body
     if (
         body
@@ -252,13 +443,4 @@ def _body_contains_exceptions(func: FuncDef) -> bool:
     try_node = body[0]
     if try_node.orelse or try_node.finalbody:
         return False
-    if not any(_is_broad(h) for h in try_node.handlers):
-        return False
-    return not any(isinstance(n, ast.Raise) for h in try_node.handlers for n in ast.walk(h))
-
-
-def _is_broad(handler: ast.ExceptHandler) -> bool:
-    if handler.type is None:
-        return True
-    types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
-    return any(isinstance(t, ast.Name) and t.id in _BROAD_EXCEPTIONS for t in types)
+    return _try_is_swallowing(try_node)

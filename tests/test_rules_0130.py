@@ -1,9 +1,13 @@
-"""0.13.0 (vibe-guard Phase 1, decisions of 2026-10-14).
+"""0.13.0 (vibe-guard Phase 1, decisions of 2026-10-14), with the containment
+relaxation of FASE1-DISENO.md point 2 (fix/pyvibe-013-containment).
 
-PYVIBE-013, strict: not reported only when every gathered awaitable resolves, in the
-same module, to a function whose whole body (at most a docstring before it) is one try
-that catches Exception/BaseException/everything, with no else, no finally and no raise in
-a handler. In doubt, reported.
+PYVIBE-013: not reported when every gathered awaitable resolves to a function that
+*contains* its exceptions — every ``await`` is inside a ``try`` that swallows broadly
+without re-raising an ordinary exception (re-raising CancelledError is allowed), or is an
+await of an expression that cannot raise an ordinary exception (asyncio.sleep; a gather of
+contained awaitables; to_thread of a contained plain def; a call to a contained function).
+Synchronous statements outside the try are allowed; a non-trivial ``finally`` and any
+ordinary re-raise break containment. In doubt, reported.
 
 PYVIBE-009: WARNING (not CRITICAL) when the opened file's I/O is delegated to a thread.
 """
@@ -101,29 +105,39 @@ class Client:
 ''') == []
 
 
-# ─── PYVIBE-013: strict body → reported ──────────────────────────────────────
+# ─── PYVIBE-013: leaky body → reported ───────────────────────────────────────
 
 @pytest.mark.parametrize("body", [
-    # a statement before the try (only a docstring is allowed)
-    "    y = x\n    try:\n        return await call(y)\n    except Exception:\n        return None\n",
-    # a statement after the try
-    "    try:\n        r = await call(x)\n    except Exception:\n        r = None\n    return r\n",
-    # else: runs outside the handlers
-    "    try:\n        r = await call(x)\n    except Exception:\n        return None\n    else:\n        return r\n",
-    # finally: can raise
+    # finally: a non-trivial finally runs on every path and can raise and escape
     "    try:\n        return await call(x)\n    except Exception:\n        return None\n    finally:\n        cleanup()\n",
-    # a handler re-raises
+    # a handler re-raises an ordinary exception
     "    try:\n        return await call(x)\n    except Exception:\n        raise\n",
     "    try:\n        return await call(x)\n    except Exception as e:\n        raise RuntimeError() from e\n",
-    # no broad handler
+    # no broad handler: a non-matching exception propagates
     "    try:\n        return await call(x)\n    except (ValueError, KeyError):\n        return None\n",
     # no try at all
     "    return await call(x)\n",
-    # async with around the try
-    "    async with lock:\n        try:\n            return await call(x)\n        except Exception:\n            return None\n",
+    # the await is in the else, outside the handlers' protection
+    "    try:\n        pass\n    except Exception:\n        return None\n    else:\n        return await call(x)\n",
 ])
-def test_013_strict_body_reported(body):
+def test_013_leaky_body_reported(body):
     assert len(_013(f"import asyncio\n\nasync def f(x):\n{body}\nasync def handler():\n    await asyncio.gather(f(1), f(2))\n")) == 1
+
+
+# ─── PYVIBE-013: contained body (relaxation of FASE1-DISENO.md §2) → not reported ─
+
+@pytest.mark.parametrize("body", [
+    # a synchronous statement before the try (the awaited I/O is still guarded) — C203 shape
+    "    y = x\n    try:\n        return await call(y)\n    except Exception:\n        return None\n",
+    # a synchronous statement after the try
+    "    try:\n        r = await call(x)\n    except Exception:\n        r = None\n    return r\n",
+    # an else with no await and no raise
+    "    try:\n        r = await call(x)\n    except Exception:\n        return None\n    else:\n        return r\n",
+    # async with around the try, and a re-raise of CancelledError — C124 shape
+    "    async with lock:\n        try:\n            return await call(x)\n        except asyncio.CancelledError:\n            raise\n        except BaseException:\n            return None\n",
+])
+def test_013_contained_body_not_reported(body):
+    assert _013(f"import asyncio\n\nasync def f(x):\n{body}\nasync def handler():\n    await asyncio.gather(f(1), f(2))\n") == []
 
 
 @pytest.mark.parametrize("src", [
@@ -208,3 +222,186 @@ def test_009_other_uses_stay_critical(body):
 
 def test_009_open_without_with_stays_critical():
     assert _009("import asyncio\nasync def handler(p):\n    f = open(p)\n    await asyncio.to_thread(f.read)\n") == [("CRITICAL", 3)]
+
+
+# ─── PYVIBE-013: regression against Joaquín's verdicts on test-corpus-1 ────────
+# Each fixture reproduces the mechanism of a reviewed finding (rewritten, not
+# copied) and cites the verdict in vibe-guard-evaluation audit-joaquin.json.
+
+def test_013_C124_fp_async_with_wrapper_cancelled_reraise():
+    # C124 (FP): gather(*(run(item) ...)) where run wraps its await in async with
+    # + try, re-raising only CancelledError and returning None otherwise.
+    assert _013('''
+import asyncio
+
+async def map_bounded(worker, items):
+    semaphore = asyncio.Semaphore(4)
+    async def run(item):
+        async with semaphore:
+            try:
+                return await worker(item)
+            except asyncio.CancelledError:
+                raise
+            except BaseException:
+                return None
+    return list(await asyncio.gather(*(run(item) for item in items)))
+''') == []
+
+
+def test_013_C011_fp_recursive_tree_over_contained_fetch():
+    # C011 (FP): _build_tree awaits gathers of a contained fetch and of itself
+    # (recursion); nothing can raise an ordinary exception.
+    assert _013('''
+import asyncio
+
+async def handler(root):
+    async def _fetch(iid):
+        try:
+            return await call(iid)
+        except Exception:
+            return None
+    async def _build_tree(item, depth):
+        raw = await asyncio.gather(*[_fetch(c) for c in item])
+        return await asyncio.gather(*[_build_tree(c, depth - 1) for c in raw if c])
+    await asyncio.gather(*[_build_tree(c, 2) for c in root])
+''') == []
+
+
+def test_013_C203_fp_sync_stmt_outside_try_and_to_thread_guarded():
+    # C203 (FP): a synchronous get_settings() outside the try; the only awaited
+    # I/O (to_thread) is inside a try that swallows broadly. Two *a, *b lists.
+    assert _013('''
+import asyncio
+
+async def _retrieve(call):
+    settings = get_settings()
+    try:
+        return await asyncio.to_thread(retrieve, settings)
+    except Exception:
+        return ""
+
+async def route_parallel(calls):
+    knowledge = [_retrieve(c) for c in calls]
+    failures = [_retrieve(c) for c in calls]
+    await asyncio.gather(*knowledge, *failures)
+''') == []
+
+
+def test_013_C220_fp_wait_for_guarded_by_timeout_and_broad():
+    # C220 (FP): await asyncio.wait_for(...) inside a try catching TimeoutError
+    # and Exception, both returning a status dict.
+    assert _013('''
+import asyncio
+
+async def _probe(timeout):
+    name = cfg()
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(work), timeout=timeout)
+    except asyncio.TimeoutError:
+        return {"status": "failed"}
+    except Exception:
+        return {"status": "failed"}
+
+async def warmup(t):
+    await asyncio.gather(_probe(t), _probe(t))
+''') == []
+
+
+def test_013_C240_fp_nested_merge_delegates_to_contained_method():
+    # C240 (FP): merge_group (async with) awaits self._integrate, which bottoms
+    # out in a method whose await is inside a swallowing try.
+    assert _013('''
+import asyncio
+
+class Summarizer:
+    async def _leaf(self, group):
+        try:
+            return await self._llm(group)
+        except Exception:
+            return group
+
+    async def _integrate(self, group):
+        return await self._leaf(group)
+
+    async def merge(self, groups):
+        semaphore = asyncio.Semaphore(4)
+        async def merge_group(group):
+            async with semaphore:
+                return await self._integrate(group)
+        await asyncio.gather(*(merge_group(g) for g in groups))
+''') == []
+
+
+def test_013_C180_tp_callee_awaits_unguarded_io():
+    # C180 (TP): make_url awaits prepare() with no try → can raise.
+    assert len(_013('''
+import asyncio
+
+async def make_url(img):
+    data = await prepare(img)
+    return data
+
+async def build(imgs):
+    await asyncio.gather(*(make_url(i) for i in imgs))
+''')) == 1
+
+
+def test_013_C208_tp_callee_reraises_ordinary_exception():
+    # C208 (TP): run_query re-raises a non-cancellation exception.
+    assert len(_013('''
+import asyncio
+
+async def run_query(q):
+    try:
+        return await search(q)
+    except TimeoutError:
+        raise
+
+async def stream(qs):
+    await asyncio.gather(*(run_query(q) for q in qs))
+''')) == 1
+
+
+def test_013_C231_tp_callee_awaits_db_outside_try():
+    # C231 (TP): rank awaits a fallback DB call outside the try.
+    assert len(_013('''
+import asyncio
+
+async def rank(db, company):
+    try:
+        ids = await vector_ids(company)
+    except Exception:
+        ids = []
+    return await fallback_similar_companies(db, company)
+
+async def page(db, companies):
+    await asyncio.gather(*(rank(db, c) for c in companies))
+''')) == 1
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known false negative (dev-labels DL-049, ARES scan_hosts, #3): a "
+    "synchronous validation that raises BEFORE the try (e.g. scope_guard."
+    "assert_in_scope) escapes the task, but PYVIBE-013 requires a concrete I/O "
+    "failure escaping the awaited call, so it is not detected. Decision 2026-10-14.",
+)
+def test_013_B2_sync_validation_before_try_known_false_negative():
+    # Pattern of #3 (ARES scan_hosts -> scan_one -> scan_host): scan_host runs a
+    # synchronous scope-guard validation that raises for out-of-scope hosts BEFORE
+    # the try; gather would propagate it. The lax rule does NOT flag this (xfail).
+    assert len(_013('''
+import asyncio
+
+async def scan_hosts(hosts, scope_guard):
+    async def scan_one(host):
+        return await scan_host(host, scope_guard)
+    async def scan_host(host, scope_guard):
+        if scope_guard is not None:
+            scope_guard.assert_in_scope(host, action="scan")
+        try:
+            return await connect(host)
+        except Exception:
+            return None
+    await asyncio.gather(*(scan_one(h) for h in hosts))
+''')) >= 1
