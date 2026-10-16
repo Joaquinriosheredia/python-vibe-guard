@@ -2,11 +2,11 @@
 
 [![tests](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml)
 
-## The incident
+## An illustrative scenario
+
+> Illustrative only: not a real incident. None of the figures in this section are measurements.
 
 A FastAPI service that handled 50 concurrent requests in staging started timing out in production at 200 rps. The team spent two days adding replicas, tweaking Gunicorn workers, and profiling CPU — nothing helped. The p99 latency was 8 seconds for an endpoint that should take 80ms.
-
-> Illustrative scenario, based on a common pattern in async Python codebases. The figures above are not measurements.
 
 Root cause: one engineer had asked an AI assistant to "add a retry with backoff" to an async handler. The AI generated `time.sleep(2)` inside the `async def`. In staging with a handful of requests it was invisible. In production it froze the entire event loop for 2 seconds per request, serializing all 200 concurrent calls through a single bottleneck.
 
@@ -18,7 +18,7 @@ The code passed every unit test. It passed the integration tests. It shipped to 
 
 ## What it detects
 
-Twenty patterns that AI models generate repeatedly, that pass all static checks, and that silently destroy async performance under real load:
+Twenty code patterns that pass static checks and unit tests but can block or break async code under real load. The rules look for code patterns, not authorship: they do not tell AI-generated code from human-written code.
 
 ### A. Event Loop Blocking
 
@@ -76,24 +76,28 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 
 ## Validation
 
-### 100-repo sweep (automated, v0.7.0)
+### Pre-registered precision measurement
 
-Automated scan of 100 GitHub repos (`stars:>100`, updated last year, async Python keywords). Script: [`validation/run_massive_scan.py`](validation/run_massive_scan.py).
+The only pre-registered measurement so far is **test-corpus-1** (2026-10-14, scanned with python-vibe-guard 0.13.0): precision of CRITICAL findings **0.7067** (Wilson 95 % 0.6294–0.7736, n = 150 reviewed, 149 of them Python), below its 90 % target. Its own report says the figure is probably optimistic: 129 of the 150 verdicts come from an AI first review that was not independently checked. The 0.14.0 changes (PYVIBE-007, PYVIBE-013, PYVIBE-017, path-based severity) were designed after looking at that corpus, so it is now a development set and does not measure 0.14.0. Source: [vibe-guard-evaluation `test-corpus-1/RESULTS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/a80d9ab/test-corpus-1/RESULTS.md).
+
+### 100-repo sweep (June 2026, historical raw hits)
+
+Automated scan of 100 GitHub repos (`stars:>100`, `pushed:>2025-06-20`, async-Python topics and keywords). These are **raw hit counts, not audited findings**, from the June 2026 scanner (0.6.0 according to `aggregate.json`; `massive-results.md` says 0.7.0). Rules have changed since, so 0.14.0 would give different numbers: for example, the PYVIBE-017 row counts `except Exception: pass`, which 0.14.0 no longer reports by default.
 
 | Metric | Value |
 |--------|-------|
 | Repos scanned | 100 |
 | .py files | 64,335 |
-| Total violations | 3,639 |
+| Total hits | 3,639 |
 
-**Rule prevalence (top 10):**
+**Rule prevalence (top 10, raw hits):**
 
 | Rule | Hits | Repos affected | % of repos |
 |------|------|----------------|-----------|
-| PYVIBE-017 `except Exception: pass` | 999 | 57 | **57%** |
-| PYVIBE-013 `gather()` no return_exceptions | 766 | 47 | **47%** |
-| PYVIBE-019 retry loop no backoff | 408 | 43 | **43%** |
-| PYVIBE-009 `open()` in async def | 178 | 33 | **33%** |
+| PYVIBE-017 `except Exception: pass` (opt-in since 0.14.0) | 999 | 57 | 57% |
+| PYVIBE-013 `gather()` no return_exceptions | 766 | 47 | 47% |
+| PYVIBE-019 retry loop no backoff | 408 | 43 | 43% |
+| PYVIBE-009 `open()` in async def | 178 | 33 | 33% |
 | PYVIBE-005 `@task` no time_limit | 882 | 15 | 15% |
 | PYVIBE-001 `time.sleep` in async | 55 | 16 | 16% |
 | PYVIBE-012 orphaned `create_task()` | 58 | 13 | 13% |
@@ -101,26 +105,9 @@ Automated scan of 100 GitHub repos (`stars:>100`, updated last year, async Pytho
 | PYVIBE-018 `while True` no await | 36 | 10 | 10% |
 | PYVIBE-006 ContextVar no reset | 19 | 10 | 10% |
 
-Full data: [`validation/aggregate.json`](validation/aggregate.json) · [`validation/massive-results.md`](validation/massive-results.md)
+Data, pinned to the commit that produced it: [`validation/aggregate.json` @ 552a57a](https://github.com/Joaquinriosheredia/python-vibe-guard/blob/552a57a/validation/aggregate.json) · [`validation/massive-results.md` @ 552a57a](https://github.com/Joaquinriosheredia/python-vibe-guard/blob/552a57a/validation/massive-results.md). The current `validation/aggregate.json` holds a later sweep and does not back this table.
 
-### Reference scan — 4 repos (reproducible)
-
-| Repo | .py files | Violations |
-|------|-----------|-----------|
-| [fastapi/fastapi](https://github.com/tiangolo/fastapi) | 1 121 | 5 |
-| [celery/celery](https://github.com/celery/celery) | 416 | 363 |
-| [aio-libs/aiohttp](https://github.com/aio-libs/aiohttp) | 164 | 29 |
-| [encode/httpx](https://github.com/encode/httpx) | 60 | 0 |
-| **Total** | **1 761** | **397** |
-
-Raw data: [`validation/breakdown.json`](validation/breakdown.json)
-
-**Notable findings:**
-
-- **home-assistant/core** — 491 violations across 17,702 files; 331 PYVIBE-013, 21 PYVIBE-018.
-- **Celery** — 352 tasks without `time_limit`; workers can hang indefinitely on broker timeouts.
-- **aiortc, anyio, uvicorn** — `while True` loops without `await` in production async I/O code (PYVIBE-018, 29 confirmed real hits after async-generator FP fix).
-- **aiohttp examples** — `open()` in async WebSocket handlers; synchronous I/O in production-facing code.
+Per-rule precision self-audits by the author (small samples, not pre-registered) are in [`research/precision-audit.md`](research/precision-audit.md). Example of context changing the count: of Celery's PYVIBE-005 hits in an early scan, about 9 were in production code (`celery/app/builtins.py`) and the rest in test fixtures and examples ([`validation/results.md`](validation/results.md)).
 
 ---
 
@@ -130,9 +117,11 @@ Raw data: [`validation/breakdown.json`](validation/breakdown.json)
 pip install python-vibe-guard
 ```
 
-Or run without installing:
+Or install from a clone (editable install):
 
 ```bash
+git clone https://github.com/Joaquinriosheredia/python-vibe-guard.git
+cd python-vibe-guard
 pip install -e .
 ```
 
@@ -175,7 +164,7 @@ python -m pyvibe audit src/ --fail-on-unused --fail-on-unjustified
 # Exit code: 0 = clean, 1 = violations found, 2 = path error
 ```
 
-### Example output
+### Example output (excerpt: the first 4 of the demo's 20 findings)
 
 ```
   python-vibe-guard
@@ -210,8 +199,10 @@ python -m pyvibe audit src/ --fail-on-unused --fail-on-unjustified
      Problem  : threading.Lock() blocks the event loop under contention
      Fix      : Use `asyncio.Lock()` with `async with lock:` instead
 
+  […16 more findings…]
+
   ─────────────────────────────────────────────
-  4 reported · 0 suppressed
+  20 reported · 0 suppressed
 ```
 
 `Suggested fix:` blocks are generated from the real code on the flagged line — they are
@@ -220,9 +211,12 @@ Currently available for PYVIBE-001, 002, 003, 007, and 008.
 
 ### `pyvibe explain`
 
-Every rule's accuracy claims come from `research/accepted/PYVIBE-XXX.md` — a per-rule
-evidence file with repo-sweep data, an evidence-level grade, and a hit-by-hit precision
-audit. `pyvibe explain` surfaces that in the terminal instead of making you go dig for it:
+`pyvibe explain` prints a rule's evidence: prevalence and evidence level from
+`research/accepted/PYVIBE-XXX.md`, and the audited precision and known false positives from
+`research/precision-audit.md`. These precision figures are the author's self-audits on small
+samples (for PYVIBE-002, ~83% = 5 TP of 6 hits, after a fix), not pre-registered
+measurements; the two files can disagree (`accepted/PYVIBE-002.md` reports 36–38% before
+that fix). The pre-registered measurement is under *Validation* above.
 
 ```bash
 python -m pyvibe explain PYVIBE-002
@@ -243,12 +237,12 @@ python -m pyvibe explain PYVIBE-002
   Visto en: 4.0% (10/250 repos, sweep-250 dataset)
   Nivel de evidencia: B
   Precisión auditada: ~83%
-  Falsos positivos conocidos: EXECUTOR_WRAPPER; INNER_SYNC_FUNCTION_EXECUTOR; ...
+  Falsos positivos conocidos: EXECUTOR_WRAPPER; INNER_SYNC_FUNCTION_EXECUTOR; VARIABLE_NAME_COLLISION; TEST_SUBJECT
 
   Fix sugerido:
     use `httpx.AsyncClient` or `aiohttp.ClientSession` with await.
 
-  Full report: research/accepted/PYVIBE-002.md
+  Full report: https://github.com/Joaquinriosheredia/python-vibe-guard/blob/master/research/accepted/PYVIBE-002.md
 ```
 
 If a rule has no evidence file, it prints a clear `No evidence file found for PYVIBE-XXX`
@@ -262,9 +256,10 @@ findings once, then only fails on genuinely **new** ones:
 
 ```bash
 # Snapshot every current finding into .pyvibe-baseline.json
+# (refuses to run if a baseline already exists — use `update` to overwrite it)
 python -m pyvibe baseline create src/
 
-# Refuses to run if a baseline already exists — use `update` to overwrite it
+# Overwrite the existing baseline with the current findings
 python -m pyvibe baseline update src/
 
 # Full scan, but only reports findings NOT already in the baseline
@@ -331,7 +326,7 @@ PYVIBE-008 = "warning"
 - `exclude`: glob patterns (relative to the `pyvibe.toml` directory) for files/directories
   to skip entirely.
 - `[tool.pyvibe.severity]`: per-rule severity override (`"critical"` or `"warning"`),
-  applied after the built-in test-file downgrade.
+  applied after the built-in path-based downgrade (see *Path-based severity* above).
 
 Both mechanisms feed into the same summary line:
 
@@ -422,10 +417,12 @@ each linking back to its `research/accepted/PYVIBE-XXX.md` evidence file via `he
 
 ## GitHub Action
 
+```yaml
 - name: python-vibe-guard
   uses: joaquinriosheredia/python-vibe-guard-action@v1
   with:
     path: src/
+```
 
 Violations appear directly in GitHub Security tab (SARIF).
 Link: https://github.com/Joaquinriosheredia/python-vibe-guard-action
@@ -456,7 +453,7 @@ The hook runs on every `git commit`, scans all Python files in the project, and 
 
 ## Design
 
-- **Pure AST, zero runtime dependencies** — uses only Python's built-in `ast` module
+- **Pure AST** — uses Python's built-in `ast` module; the only runtime dependency is `tomli` on Python < 3.11 (to read `pyvibe.toml`)
 - **Each rule is an independent `ast.NodeVisitor`** — easy to add, disable, or extend
 - **Gate on `async def`** — most rules check `_current_async_func` before firing; PYVIBE-017 (silent except) fires only in async functions, around an `await`
 - **No import resolution** — works on any Python file without installing its dependencies
@@ -478,11 +475,9 @@ Expected: 20 findings (18 CRITICAL + 2 WARNING for PYVIBE-019 retry without back
 
 ```bash
 python -m pytest tests/ -v
-# or
-python tests/test_rules.py
 ```
 
-385 tests: true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
+Tests cover true positives + false-positive guards for every rule, plus SARIF output, `pyvibe explain`, `pyvibe review`, baseline mode, suppressions (inline comments + pyvibe.toml), and `pyvibe audit` (justifications + orphan detection) coverage.
 
 ---
 
@@ -496,7 +491,7 @@ python tests/test_rules.py
 
 This project is part of the **vibe-guard** family of runtime anti-pattern scanners:
 
-- [java-vibe-guard](https://github.com/jouninno/java-vibe-guard) — Spring Boot / async Java (blocking Kafka, @Transactional + Virtual Threads)
+- [java-vibe-guard](https://github.com/Joaquinriosheredia/java-vibe-guard) — Spring Boot / async Java (blocking Kafka, @Transactional + Virtual Threads)
 - **python-vibe-guard** — FastAPI / asyncio (this project)
 
 ---
