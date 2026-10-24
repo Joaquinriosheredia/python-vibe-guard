@@ -2,9 +2,10 @@
 
 All notable changes to python-vibe-guard are recorded here.
 
-## Unreleased
+## 0.15.0 — 2026-10-24
 
-False positives of test-corpus-2 (vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`), each
+Minor, because the package is still 0.x and the default severities change incompatibly: the
+same convention 0.14.0 used. False positives of test-corpus-2 (vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`), each
 with a regression test from the reviewed code (`tests/test_tc2_regressions.py`). Declared in
 `test-corpus-3/PREREGISTRATION.md` before these changes.
 
