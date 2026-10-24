@@ -1226,7 +1226,8 @@ def my_celery_fixture(x):
     assert v005[0].severity == "WARNING"
 
 
-def test_005_still_critical_in_production_file():
+def test_005_is_warning_in_production_file_too():
+    # Demoted to WARNING (test-corpus-2 FP-ANALYSIS.md; test-corpus-3 pre-registration)
     src = """
 @app.task
 def send_invoice(order_id):
@@ -1235,7 +1236,7 @@ def send_invoice(order_id):
     violations = analyze_source(src, "myapp/tasks.py")
     v005 = [v for v in violations if v.rule_id == "PYVIBE-005"]
     assert len(v005) == 1
-    assert v005[0].severity == "CRITICAL"
+    assert v005[0].severity == "WARNING"
 
 
 # ─── Fix 5: TEST_FILE_DOWNGRADE extended to PYVIBE-008 ───────────────────────

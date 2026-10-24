@@ -48,12 +48,16 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
     synchronous statements outside the try is what keeps the common guarded
     pattern from being over-reported. Covered by an xfail regression test.
 
+    WARNING, not CRITICAL (test-corpus-2, 2 TP of 10): in 8 FPs every gathered
+    awaitable contained its exceptions in another function or module, or an enclosing
+    gather(return_exceptions=True) collected them — not decidable within one file.
+
     Fix: add return_exceptions=True and inspect the result list, or use
     asyncio.TaskGroup (Python 3.11+) for explicit structured concurrency.
     """
 
     RULE_ID = "PYVIBE-013"
-    SEVERITY = "CRITICAL"
+    SEVERITY = "WARNING"
 
     def __init__(self):
         super().__init__()
@@ -101,8 +105,8 @@ class GatherNoReturnExceptionsRule(AsyncContextVisitor):
                 function_name=self._current_async_func,
                 message=(
                     "asyncio.gather() without return_exceptions=True: if one awaitable raises, "
-                    "gather re-raises it and the others keep running with nobody observing "
-                    "their results or later exceptions"
+                    "gather re-raises the first exception and the other awaitables keep running; "
+                    "their results and later exceptions are not observed by this call"
                 ),
                 evidence=(
                     "Add return_exceptions=True and check results: "

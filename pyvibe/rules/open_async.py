@@ -66,7 +66,10 @@ class OpenAsyncRule(AsyncBlockingCallVisitor):
                     severity=self.SEVERITY,
                     line=node.lineno,
                     function_name=self._current_async_func,
-                    message="open() performs synchronous file I/O — blocks the event loop",
+                    message=(
+                        "open() inside async def runs on the event loop — the open and every read/write on the "
+                        "handle block other coroutines for as long as the file I/O takes"
+                    ),
                     evidence="Use `async with aiofiles.open(path) as f: content = await f.read()`",
                 ))
 

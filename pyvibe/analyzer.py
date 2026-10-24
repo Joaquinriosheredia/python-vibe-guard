@@ -91,6 +91,56 @@ _NONPROD_SEGMENTS: FrozenSet[str] = frozenset({
 })
 
 
+# Blocking-call rules (the "blocking in async def" group of the pre-registered rule
+# criteria): their FP context includes code that runs only at start-up.
+BLOCKING_RULES: FrozenSet[str] = frozenset({
+    "PYVIBE-001", "PYVIBE-002", "PYVIBE-004", "PYVIBE-007", "PYVIBE-008",
+    "PYVIBE-009", "PYVIBE-010", "PYVIBE-011", "PYVIBE-016", "PYVIBE-018",
+})
+
+
+def _entry_coroutines(tree: ast.Module) -> dict:
+    """{name: (first line, last line)} of the module-level `async def`s that this module
+    passes to `asyncio.run(name(...))`: the program's top-level coroutine (start-up,
+    scripts). test-corpus-2 P079/P080/P083/P084/P099 (config read in `_start_*`), P001."""
+    defs = {n.name: (n.lineno, n.end_lineno) for n in tree.body if isinstance(n, ast.AsyncFunctionDef)}
+    entries = {}
+    # Only an asyncio.run() outside every async def starts the program; inside one it is
+    # itself an error (PYVIBE-003).
+    stack = [n for n in ast.iter_child_nodes(tree)]
+    calls = []
+    while stack:
+        n = stack.pop()
+        if isinstance(n, (ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        calls.append(n)
+        stack.extend(ast.iter_child_nodes(n))
+    for n in calls:
+        if (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute) and n.func.attr == "run"
+            and isinstance(n.func.value, ast.Name) and n.func.value.id == "asyncio"
+            and n.args and isinstance(n.args[0], ast.Call)
+            and isinstance(n.args[0].func, ast.Name) and n.args[0].func.id in defs
+        ):
+            entries[n.args[0].func.id] = defs[n.args[0].func.id]
+    return entries
+
+
+def _downgrade_entry_coroutine(tree: ast.Module, violations: List[Violation]) -> None:
+    """Rebaja, never silence: a blocking CRITICAL directly in the asyncio.run() entry
+    coroutine becomes WARNING, with the reason in the message."""
+    entries = _entry_coroutines(tree)
+    for v in violations:
+        span = entries.get(v.function_name)
+        if v.rule_id in BLOCKING_RULES and v.severity == "CRITICAL" and span and span[0] <= v.line <= span[1]:
+            v.severity = "WARNING"
+            v.message += (
+                f" — WARNING, not CRITICAL: inside {v.function_name}(), the coroutine this module passes to "
+                "asyncio.run(), i.e. the program's top-level coroutine (typically start-up)"
+            )
+
+
 def _is_test_file(filepath: str) -> bool:
     p = Path(filepath)
     name = p.name
@@ -159,6 +209,8 @@ def analyze_source_full(
             visitor = RuleClass()
         visitor.visit(tree)
         violations.extend(visitor.violations)
+
+    _downgrade_entry_coroutine(tree, violations)
 
     if downgrade_in_tests and _is_test_file(filepath):
         for v in violations:

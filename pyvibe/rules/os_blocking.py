@@ -14,6 +14,10 @@ class OsBlockingRule(AsyncBlockingCallVisitor):
     generated when AI migrates sync scripts to async without replacing the
     OS interaction layer.
 
+    Not reported: os.waitpid(pid, os.WNOHANG) (WNOHANG anywhere in its options),
+    which returns at once instead of waiting (test-corpus-2 P119/P122, polled with
+    await asyncio.sleep).
+
     Fix: use asyncio.create_subprocess_shell() with await proc.communicate().
     """
 
@@ -26,13 +30,15 @@ class OsBlockingRule(AsyncBlockingCallVisitor):
             return
 
         method = self._get_os_blocking_method(node)
+        if method == "waitpid" and _has_wnohang(node):
+            method = None
         if method:
             self.violations.append(Violation(
                 rule_id=self.RULE_ID,
                 severity=self.SEVERITY,
                 line=node.lineno,
                 function_name=self._current_async_func,
-                message=f"os.{method}() blocks the OS thread — no direct async equivalent",
+                message=f"os.{method}() inside async def blocks the event loop until the child process finishes",
                 evidence="Use `proc = await asyncio.create_subprocess_shell(cmd)` then `await proc.communicate()`",
             ))
 
@@ -47,3 +53,16 @@ class OsBlockingRule(AsyncBlockingCallVisitor):
         ):
             return node.func.attr
         return None
+
+
+def _has_wnohang(node: ast.Call) -> bool:
+    """os.waitpid(pid, options) whose options mention WNOHANG (os.WNOHANG, a bare WNOHANG,
+    or either OR-ed with other flags)."""
+    options = node.args[1] if len(node.args) > 1 else next(
+        (kw.value for kw in node.keywords if kw.arg == "options"), None)
+    if options is None:
+        return False
+    return any(
+        (isinstance(n, ast.Attribute) and n.attr == "WNOHANG") or (isinstance(n, ast.Name) and n.id == "WNOHANG")
+        for n in ast.walk(options)
+    )

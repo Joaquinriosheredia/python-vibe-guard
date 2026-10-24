@@ -26,7 +26,11 @@ class CreateTaskOrphanRule(AsyncContextVisitor):
                 severity=self.SEVERITY,
                 line=node.lineno,
                 function_name=self._current_async_func,
-                message="asyncio.create_task() return value discarded — task may be GC'd and silently cancelled",
+                message=(
+                    "asyncio.create_task() return value discarded — the event loop keeps only a weak reference "
+                    "to the task, so it can be garbage-collected before it finishes, and an exception it raises "
+                    "is never retrieved"
+                ),
                 evidence=(
                     "Assign and await: `task = asyncio.create_task(coro()); await task`, "
                     "or use `async with asyncio.TaskGroup() as tg: tg.create_task(coro())` (Python 3.11+)"

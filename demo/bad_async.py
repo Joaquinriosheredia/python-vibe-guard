@@ -1,8 +1,10 @@
 """
 demo/bad_async.py — one violation per rule (PYVIBE-001 through PYVIBE-020).
 Run: python -m pyvibe demo/bad_async.py
-Expected: 20 findings (18 CRITICAL + 2 WARNING for PYVIBE-019 retry without
-backoff and PYVIBE-020 put_nowait without handler).
+Expected: 20 findings (16 CRITICAL + 4 WARNING: PYVIBE-005 Celery without time
+limit and PYVIBE-013 gather without return_exceptions, both WARNING rules since
+test-corpus-2, PYVIBE-019 retry without backoff and PYVIBE-020 put_nowait without
+handler).
 
 sync_function() at the bottom uses the same async-specific patterns in sync
 context and produces ZERO findings for those rules.

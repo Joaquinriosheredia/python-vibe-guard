@@ -17,12 +17,14 @@ import pytest
 
 from pyvibe.analyzer import analyze_directory, analyze_source
 
-# A gather() with unresolved awaitables → PYVIBE-013 CRITICAL in production.
-GATHER = "import asyncio\nasync def handler():\n    await asyncio.gather(a(), b())\n"
+# time.sleep() in an async def → PYVIBE-001 CRITICAL in production. The mechanism is
+# rule-agnostic; the probe was PYVIBE-013 until it was demoted to WARNING (test-corpus-2
+# FP-ANALYSIS.md), and the DL-003/DL-022 cases below were PYVIBE-013 findings.
+PROBE = "import time\nasync def handler():\n    time.sleep(1)\n"
 
 
-def _013(src, path):
-    return [v for v in analyze_source(src, path) if v.rule_id == "PYVIBE-013"]
+def _probe(src, path):
+    return [v for v in analyze_source(src, path) if v.rule_id == "PYVIBE-001"]
 
 
 # ── regression fixtures (cite dev-labels.json) ───────────────────────────────
@@ -30,14 +32,14 @@ def _013(src, path):
 def test_c_dl003_tests_dir_downgraded_to_warning():
     # dev-labels DL-003 (ARES tests/unit/test_scope_firewall.py:194, PYVIBE-013):
     # a finding under a tests/ directory is reported as WARNING, not CRITICAL.
-    v = _013(GATHER, "tests/unit/test_scope_firewall.py")
+    v = _probe(PROBE, "tests/unit/test_scope_firewall.py")
     assert len(v) == 1 and v[0].severity == "WARNING"
 
 
 def test_c_dl022_scripts_dir_downgraded_to_warning():
     # dev-labels DL-022 (MimirQ scripts/deepdoc_quality_gate.py:542, PYVIBE-013):
     # a finding under a scripts/ directory is reported as WARNING, not CRITICAL.
-    v = _013(GATHER, "scripts/deepdoc_quality_gate.py")
+    v = _probe(PROBE, "scripts/deepdoc_quality_gate.py")
     assert len(v) == 1 and v[0].severity == "WARNING"
 
 
@@ -52,7 +54,7 @@ def test_c_dl022_scripts_dir_downgraded_to_warning():
     "examples/demo.py",
 ])
 def test_c_nonprod_segment_downgrades(path):
-    v = _013(GATHER, path)
+    v = _probe(PROBE, path)
     assert len(v) == 1 and v[0].severity == "WARNING", f"{path} should downgrade"
 
 
@@ -62,14 +64,14 @@ def test_c_nonprod_segment_downgrades(path):
     "src/app/handlers.py",        # ordinary production
 ])
 def test_c_production_paths_stay_critical(path):
-    v = _013(GATHER, path)
+    v = _probe(PROBE, path)
     assert len(v) == 1 and v[0].severity == "CRITICAL", f"{path} must NOT downgrade"
 
 
 def test_c_never_silences():
     # The finding is kept in every case — only its severity changes.
-    assert len(_013(GATHER, "tests/x.py")) == 1
-    assert len(_013(GATHER, "app/x.py")) == 1
+    assert len(_probe(PROBE, "tests/x.py")) == 1
+    assert len(_probe(PROBE, "app/x.py")) == 1
 
 
 # ── CLI and library behave the same (decision 2026-10-14) ────────────────────

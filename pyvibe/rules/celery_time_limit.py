@@ -1,8 +1,13 @@
 import ast
-from typing import List
+from typing import Dict, List
 from pyvibe.rules.base import Violation
 
 _LIMIT_KEYS = {"soft_time_limit", "time_limit"}
+
+# Task frameworks whose apps also expose a `.task` decorator. A file importing one of
+# them (and not celery) is not a Celery file (test-corpus-2: Procrastinate's
+# `@task_app.task`, 13 FPs, FP-ANALYSIS.md §1).
+_OTHER_TASK_FRAMEWORKS = {"procrastinate", "huey", "dramatiq", "taskiq", "arq", "rq", "saq", "faust"}
 
 
 class CeleryTaskTimeLimitRule(ast.NodeVisitor):
@@ -14,6 +19,14 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
     Under load, all workers fill with hung tasks and the queue stalls.
 
     Detected decorators: @app.task, @shared_task (bare or with kwargs).
+
+    WARNING, not CRITICAL (test-corpus-2, 0 TP of 13): a missing per-task limit only
+    hurts if the wrapped work never returns, and the rule cannot see a global limit.
+
+    A receiver imported by the file counts as Celery's only when it is imported from a
+    module whose dotted path contains "celery", or the file imports celery; a file that
+    imports another task framework (Procrastinate, Huey, Dramatiq, taskiq, arq, RQ, SAQ,
+    Faust) and not celery is never reported.
     Fix: @app.task(soft_time_limit=30, time_limit=60)
 
     Known limitation — global configuration blind spot:
@@ -30,31 +43,46 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
     """
 
     RULE_ID = "PYVIBE-005"
-    SEVERITY = "CRITICAL"
+    SEVERITY = "WARNING"
 
     def __init__(self):
         self.violations: List[Violation] = []
         self._has_celery_import: bool = False
+        self._has_other_framework_import: bool = False
+        self._imported_from: Dict[str, str] = {}  # local name -> module it was imported from
+        self._defs: List[ast.AST] = []
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             if alias.name == "celery" or alias.name.startswith("celery."):
                 self._has_celery_import = True
-                break
+            if alias.name.split(".")[0] in _OTHER_TASK_FRAMEWORKS:
+                self._has_other_framework_import = True
+            self._imported_from[(alias.asname or alias.name).split(".")[0]] = alias.name
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.module and (node.module == "celery" or node.module.startswith("celery.")):
+        module = node.module or ""
+        if module == "celery" or module.startswith("celery."):
             self._has_celery_import = True
+        if module.split(".")[0] in _OTHER_TASK_FRAMEWORKS:
+            self._has_other_framework_import = True
+        for alias in node.names:
+            self._imported_from[alias.asname or alias.name] = module
         self.generic_visit(node)
 
+    # Decorators are checked after the whole module is visited, so an import below a
+    # task (or inside a function) still counts.
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self._check(node)
+        self._defs.append(node)
         self.generic_visit(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        self._check(node)
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Module(self, node: ast.Module):
         self.generic_visit(node)
+        for d in self._defs:
+            self._check(d)
 
     # ── private ──────────────────────────────────────────────────────────────
 
@@ -66,12 +94,17 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
                     severity=self.SEVERITY,
                     line=node.lineno,
                     function_name=node.name,
-                    message="Celery task defined without soft_time_limit or time_limit — can hang forever",
+                    message=(
+                        "Celery task without soft_time_limit or time_limit — if the work it wraps never returns, "
+                        "it holds a worker until a global task_time_limit (if one is set) stops it"
+                    ),
                     evidence="Use @app.task(soft_time_limit=30, time_limit=60) to bound execution time",
                 ))
                 break  # one violation per function, even if decorated twice
 
     def _is_task_decorator(self, decorator: ast.expr) -> bool:
+        if self._has_other_framework_import and not self._has_celery_import:
+            return False
         # Unwrap @app.task(...) or @shared_task(...) to their func node
         node = decorator.func if isinstance(decorator, ast.Call) else decorator
         # @shared_task — Celery-specific; taskiq/huey/dramatiq don't use this name
@@ -83,6 +116,10 @@ class CeleryTaskTimeLimitRule(ast.NodeVisitor):
             # test infrastructure (Celery own tests, Huey tests). Skip.
             if not isinstance(receiver, ast.Name):
                 return False
+            if receiver.id in self._imported_from:
+                # `from proj.celery import app` / `from .celery_app import app` count;
+                # `from app.tasks import task_app` (Procrastinate, test-corpus-2) does not.
+                return "celery" in self._imported_from[receiver.id].lower() or self._has_celery_import
             name = receiver.id.lower()
             # @app.task / @importer_app.task — "app" strongly signals a Celery
             # application object; no other common async task framework uses it
