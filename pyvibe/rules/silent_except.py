@@ -67,7 +67,9 @@ class SilentExceptRule(ast.NodeVisitor):
     *opt-in* (set `report_broad_except = true` under `[tool.pyvibe]`, or pass
     `--report-broad-except`); it is not reported by default. A bare except in
     synchronous code, a specific exception type, a non-empty handler, and a
-    handler that re-raises are not reported.
+    handler that re-raises are not reported. Nor is an empty handler nested in a
+    handler of the same function whose last statement is a bare `raise`: the
+    exception being handled is re-raised anyway (test-corpus-2 P043).
 
     Suppression: add `# nosec B110` on the `except` line to mark intentional
     suppression (Bandit convention). Generic `# nosec` without B110 is NOT
@@ -86,6 +88,7 @@ class SilentExceptRule(ast.NodeVisitor):
         self._report_broad_except = report_broad_except
         self._in_async = False
         self._handler_suspends: dict = {}  # id(handler) -> try body has a suspension point
+        self._reraising_handlers = 0  # enclosing handlers (same function) that end with a bare raise
 
     def _is_suppressed(self, lineno: int) -> bool:
         """Return True if the given 1-based line carries # nosec B110."""
@@ -97,22 +100,22 @@ class SilentExceptRule(ast.NodeVisitor):
         return False
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        prev_func, prev_async = self._current_func, self._in_async
-        self._current_func, self._in_async = node.name, False  # a sync def is not async context
+        prev_func, prev_async, prev_rr = self._current_func, self._in_async, self._reraising_handlers
+        self._current_func, self._in_async, self._reraising_handlers = node.name, False, 0  # a sync def is not async context
         self.generic_visit(node)
-        self._current_func, self._in_async = prev_func, prev_async
+        self._current_func, self._in_async, self._reraising_handlers = prev_func, prev_async, prev_rr
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        prev_func, prev_async = self._current_func, self._in_async
-        self._current_func, self._in_async = node.name, True
+        prev_func, prev_async, prev_rr = self._current_func, self._in_async, self._reraising_handlers
+        self._current_func, self._in_async, self._reraising_handlers = node.name, True, 0
         self.generic_visit(node)
-        self._current_func, self._in_async = prev_func, prev_async
+        self._current_func, self._in_async, self._reraising_handlers = prev_func, prev_async, prev_rr
 
     def visit_Lambda(self, node: ast.Lambda):
-        prev_async = self._in_async
-        self._in_async = False
+        prev_async, prev_rr = self._in_async, self._reraising_handlers
+        self._in_async, self._reraising_handlers = False, 0
         self.generic_visit(node)
-        self._in_async = prev_async
+        self._in_async, self._reraising_handlers = prev_async, prev_rr
 
     def visit_Try(self, node: ast.Try):
         suspends = _has_suspension_point(node.body)
@@ -123,12 +126,22 @@ class SilentExceptRule(ast.NodeVisitor):
     visit_TryStar = visit_Try  # Python 3.11+ (except*)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        # An empty handler nested in a handler of the same function that ends with a
+        # bare `raise` cannot swallow the exception being handled: it is re-raised
+        # (test-corpus-2 P043: `except BaseException: pass` while draining, inside
+        # `except CancelledError: ... raise`).
+        if not self._reraising_handlers:
+            self._check_handler(node)
+        reraises = bool(node.body) and isinstance(node.body[-1], ast.Raise) and node.body[-1].exc is None
+        self._reraising_handlers += reraises
+        self.generic_visit(node)
+        self._reraising_handlers -= reraises
+
+    def _check_handler(self, node: ast.ExceptHandler):
         if not _is_empty_body(node.body):
-            self.generic_visit(node)
             return
 
         if self._is_suppressed(node.lineno):
-            self.generic_visit(node)
             return
 
         names = _handler_names(node.type)
@@ -137,7 +150,6 @@ class SilentExceptRule(ast.NodeVisitor):
             # bare except: only in async context (swallows CancelledError etc.),
             # and only if the try body can be suspended (where cancellation arrives)
             if not self._in_async or not suspends:
-                self.generic_visit(node)
                 return
             severity = "CRITICAL"
             message = (
@@ -149,7 +161,6 @@ class SilentExceptRule(ast.NodeVisitor):
             # except BaseException with an empty body: only in async context,
             # and only if the try body can be suspended (where cancellation arrives)
             if not self._in_async or not suspends:
-                self.generic_visit(node)
                 return
             severity = "CRITICAL"
             message = (
@@ -159,13 +170,11 @@ class SilentExceptRule(ast.NodeVisitor):
         elif "Exception" in names:
             # except Exception: pass — common; opt-in only.
             if not self._report_broad_except:
-                self.generic_visit(node)
                 return
             severity = "WARNING"
             message = "except Exception with empty body silences all errors silently"
         else:
             # specific exception type — acceptable pattern
-            self.generic_visit(node)
             return
 
         self.violations.append(Violation(
@@ -180,4 +189,3 @@ class SilentExceptRule(ast.NodeVisitor):
                 "or handle explicitly"
             ),
         ))
-        self.generic_visit(node)

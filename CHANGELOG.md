@@ -2,6 +2,35 @@
 
 All notable changes to python-vibe-guard are recorded here.
 
+## Unreleased
+
+False positives of test-corpus-2 (vibe-guard-evaluation `test-corpus-2/FP-ANALYSIS.md`), each
+with a regression test from the reviewed code (`tests/test_tc2_regressions.py`). Declared in
+`test-corpus-3/PREREGISTRATION.md` before these changes.
+
+### ⚠ BREAKING — default severities (CI gates may report fewer CRITICAL)
+- **PYVIBE-005** (Celery without time limit) is now **WARNING**. test-corpus-2: 0 TP of 13.
+  A receiver imported from a module counts as Celery's only if the module's path contains
+  `celery` or the file imports `celery`. A file importing Procrastinate, Huey, Dramatiq,
+  taskiq, arq, RQ, SAQ or Faust (and not `celery`) is not reported (13 FPs were
+  Procrastinate's `@task_app.task`).
+- **PYVIBE-013** (`gather()` without `return_exceptions`) is now **WARNING**. test-corpus-2:
+  2 TP of 10; the containment was in other modules.
+- **Blocking rules at start-up:** a CRITICAL of PYVIBE-001/002/004/007/008/009/010/011/016/018
+  directly in the module-level `async def` that the module passes to `asyncio.run()` (outside
+  any `async def`) is **WARNING**, with the reason in the message (P079, P080, P083, P084,
+  P099, P001).
+
+### Changed
+- **PYVIBE-011:** `os.waitpid(…, WNOHANG)` is not reported (P119, P122).
+- **PYVIBE-018:** a bounded "first free name" search is not reported (P014, P078).
+- **PYVIBE-017:** an empty handler inside a handler of the same function that ends with a bare
+  `raise` is not reported (P043).
+- **Messages reworded** to state the mechanism and its condition instead of the worst case:
+  PYVIBE-005, 009, 011, 012, 013, 018. A baseline entry keyed on an old message no longer
+  matches.
+- The demo gives 20 findings: 16 CRITICAL and 4 WARNING.
+
 ## 0.14.0 — 2026-10-14
 
 vibe-guard Phase 1 precision work (#9, #10, #11, #12, #13).
