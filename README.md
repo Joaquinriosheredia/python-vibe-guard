@@ -81,7 +81,9 @@ Patterns that introduce data races, swallowed errors, or runaway loops under con
 
 ### Pre-registered precision measurement
 
-The only pre-registered measurement so far is **test-corpus-1** (2026-10-14, scanned with python-vibe-guard 0.13.0): precision of CRITICAL findings **0.7067** (Wilson 95 % 0.6294–0.7736, n = 150 reviewed, 149 of them Python), below its 90 % target. Its own report says the figure is probably optimistic: 129 of the 150 verdicts come from an AI first review that was not independently checked. The 0.14.0 changes (PYVIBE-007, PYVIBE-013, PYVIBE-017, path-based severity) were designed after looking at that corpus, so it is now a development set and does not measure 0.14.0. Source: [vibe-guard-evaluation `test-corpus-1/RESULTS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/a80d9ab/test-corpus-1/RESULTS.md).
+**test-corpus-2** (2026-10-24, python-vibe-guard 0.14.0, 20 FastAPI/async repositories, 100 of 168 CRITICAL reviewed): precision **0.66** (Wilson 95 % 0.5628–0.7454), below the 90 % target, and **13.43 false CRITICAL alarms per 1,000 files** against a limit of 5: **criteria 1 and 2 NOT MET**. The author's audit of the AI review also declared that review NOT RELIABLE. Source: [vibe-guard-evaluation `test-corpus-2/METRICS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/65f57e4/test-corpus-2/METRICS.md). The 0.15.0 changes were fixed against those findings ([`FP-ANALYSIS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/a05e1f4/test-corpus-2/FP-ANALYSIS.md)), so test-corpus-2 does not measure 0.15.0. That is test-corpus-3, pre-registered before the fixes.
+
+Before it, **test-corpus-1** (2026-10-14, scanned with python-vibe-guard 0.13.0): precision of CRITICAL findings **0.7067** (Wilson 95 % 0.6294–0.7736, n = 150 reviewed, 149 of them Python), below its 90 % target. Its own report says the figure is probably optimistic: 129 of the 150 verdicts come from an AI first review that was not independently checked. The 0.14.0 changes (PYVIBE-007, PYVIBE-013, PYVIBE-017, path-based severity) were designed after looking at that corpus, so it is now a development set and does not measure 0.14.0. Source: [vibe-guard-evaluation `test-corpus-1/RESULTS.md`](https://github.com/Joaquinriosheredia/vibe-guard-evaluation/blob/a80d9ab/test-corpus-1/RESULTS.md).
 
 ### 100-repo sweep (June 2026, historical raw hits)
 
@@ -439,7 +441,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Joaquinriosheredia/python-vibe-guard
-    rev: v0.14.0
+    rev: v0.15.0
     hooks:
       - id: python-vibe-guard
 ```
