@@ -1,5 +1,7 @@
 # python-vibe-guard
 
+> **Community edition, frozen at 0.15.0: no new features.**
+
 [![tests](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Joaquinriosheredia/python-vibe-guard/actions/workflows/ci.yml)
 
 ## An illustrative scenario
